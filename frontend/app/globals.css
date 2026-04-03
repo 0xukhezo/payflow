@@ -1,26 +1,134 @@
+@import url("https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap");
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ─────────────────────────────────────────────────────────────
+   Design tokens → Tailwind utilities
+   Colors  : bg-*, text-*, border-*  (e.g. bg-surface, text-gold)
+   Opacity : use / modifier           (e.g. bg-gold/15, border-teal/30)
+   Fonts   : font-*                   (e.g. font-heading, font-mono)
+───────────────────────────────────────────────────────────── */
+@theme {
+  --color-bg:       #050507;
+  --color-surface:  #0C0C12;
+  --color-overlay:  #111118;
+  --color-line:     #2E2E42;
+  --color-rim:      #3C3C54;
+  --color-gold:     #D4942A;
+  --color-gold-dim: #9A6B1A;
+  --color-teal:     #00BF91;
+  --color-violet:   #7B6DFA;
+  --color-red:      #E05252;
+  --color-ink:      #EDE8DC;
+  --color-muted:       #9490A0;
+  --color-faint:       #cccccf;
+  --color-placeholder: #3E3E52;
+
+  --color-void:   #040406;
+  --color-paper:  #0A0800;
+
+  --font-heading: 'Syne', sans-serif;
+  --font-ui:      'IBM Plex Sans', sans-serif;
+  --font-mono:    'IBM Plex Mono', monospace;
+
+  --tracking-loose:   0.12em;
+  --tracking-looser:  0.15em;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* ─── Base ───────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+button, [role="button"], a, label[for], select { cursor: pointer; }
+button:disabled, [role="button"][aria-disabled="true"], input:disabled, select:disabled { cursor: not-allowed; }
+html { background: var(--color-bg); }
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
 }
+
+/* Noise overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
+  opacity: 0.025;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ─── Inputs ─────────────────────────────────────────────────── */
+input, textarea, select {
+  background: var(--color-overlay);
+  color: var(--color-ink);
+  border: 1px solid var(--color-line);
+  font-family: var(--font-ui);
+}
+input::placeholder { color: var(--color-placeholder); }
+input:focus {
+  outline: none;
+  border-color: var(--color-gold-dim);
+  box-shadow: 0 0 0 2px rgba(212, 148, 42, 0.15);
+}
+:focus-visible { outline: 1px solid var(--color-gold); outline-offset: 2px; }
+
+/* ─── Scrollbar ──────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--color-bg); }
+::-webkit-scrollbar-thumb { background: var(--color-rim); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-faint); }
+
+/* ─── Pseudo-selectors (cannot live inside @utility) ─────────── */
+.scanlines::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px);
+  pointer-events: none;
+}
+.ticker-track:hover { animation-play-state: paused; }
+.cursor-blink::after { content: '▋'; animation: blink 1s step-end infinite; color: var(--color-gold); margin-left: 2px; }
+.data-row:last-child { border-bottom: none; }
+
+/* ─── Keyframes ──────────────────────────────────────────────── */
+@keyframes ticker   { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+@keyframes fadeUp   { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulseDot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.7); } }
+@keyframes blink    { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+
+/* ─── Utilities ──────────────────────────────────────────────── */
+@utility section-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-faint);
+}
+@utility text-gradient-gold {
+  background: linear-gradient(135deg, #F5C842 0%, #D4942A 40%, #A06B18 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+@utility bg-grid {
+  background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.04) 1px, transparent 0);
+  background-size: 32px 32px;
+}
+@utility scanlines { position: relative; overflow: hidden; }
+@utility ticker-track { animation: ticker 28s linear infinite; display: flex; width: max-content; }
+@utility fade-up   { animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@utility fade-up-1 { animation-delay: 0.05s; }
+@utility fade-up-2 { animation-delay: 0.12s; }
+@utility fade-up-3 { animation-delay: 0.20s; }
+@utility fade-up-4 { animation-delay: 0.28s; }
+@utility fade-up-5 { animation-delay: 0.36s; }
+@utility pulse-dot { animation: pulseDot 2s ease-in-out infinite; }
+@utility data-row  { display: flex; align-items: baseline; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--color-line); gap: 16px; }
+@utility data-label { color: var(--color-muted); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; flex-shrink: 0; font-family: var(--font-mono); }
+@utility data-value { color: var(--color-ink); font-family: var(--font-mono); font-size: 13px; text-align: right; word-break: break-all; }
+@utility status-waiting    { color: #C4A44A;                background: rgba(196,164,74,0.10);  border-color: rgba(196,164,74,0.25);  }
+@utility status-processing { color: var(--color-violet);   background: rgba(123,109,250,0.10); border-color: rgba(123,109,250,0.25); }
+@utility status-settled    { color: var(--color-teal);     background: rgba(0,191,145,0.10);   border-color: rgba(0,191,145,0.25);   }

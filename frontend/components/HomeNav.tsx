@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useUserRole } from "@/lib/useUserRole";
 
 const NAV_LINKS = [
-  { href: "/company", label: "Companies" },
+  { href: "/company",  label: "Companies" },
   { href: "/employee", label: "Employees" },
 ];
 
