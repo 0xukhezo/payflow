@@ -4,6 +4,7 @@
  */
 import { signRequest } from "@worldcoin/idkit-server";
 
+const WORLD_ID_APP_ID = process.env.WORLD_ID_APP_ID || "";
 const WORLD_ID_ACTION = process.env.WORLD_ID_ACTION || "verify-employee";
 const RP_ID = process.env.RP_ID || "";
 const RP_SIGNING_KEY = process.env.RP_SIGNING_KEY || "";
