@@ -1,0 +1,37 @@
+{
+  "companyId": "eaf85bda-a83b-4bc4-bc88-fb2fae740e18",
+  "treasury": "0x567F322eD008DE36F4774bD0D92d5E70E235D461",
+  "depositChainId": 42161,
+  "employees": [
+    {
+      "id": "emp-001",
+      "name": "Alvaro Teran",
+      "salaryUsdc": 20,
+      "settleAddress": "0x982997a10b6d0672F359cB35c34E5e8a26C87b7D",
+      "solanaAddress": "7EcDhSYGxXyscszYEp35KHN8vvw3svAuLKTzXwCFLtV",
+      "preferredAsset": "WETH",
+      "preferredChainId": 42161,
+      "worldIdVerified": true,
+      "splits": [
+        {
+          "percent": 20,
+          "asset": "USDC",
+          "chain_id": 8453,
+          "settleAddress": "0x982997a10b6d0672F359cB35c34E5e8a26C87b7D"
+        },
+        {
+          "percent": 30,
+          "asset": "WETH",
+          "chain_id": 42161,
+          "settleAddress": "0xb8D5233B25d95B2749b137B665D8891941AC2301"
+        },
+        {
+          "percent": 50,
+          "asset": "WETH",
+          "chain_id": 8453,
+          "settleAddress": "0x982997a10b6d0672F359cB35c34E5e8a26C87b7D"
+        }
+      ]
+    }
+  ]
+}
