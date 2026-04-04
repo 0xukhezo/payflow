@@ -21,6 +21,8 @@ import {
   cre,
   Runner,
   Report,
+  handler,
+  HTTPCapability,
   type Runtime,
   type NodeRuntime,
   type HTTPPayload,
@@ -543,19 +545,19 @@ const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const initWorkflow = (config: Config): any[] => {
-  const http = new cre.capabilities.HTTPCapability();
+  const http = new HTTPCapability();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handlers: any[] = [cre.handler(http.trigger({}), onHttpTrigger)];
+  const handlers: any[] = [handler(http.trigger({}), onHttpTrigger)];
 
   // When triggerContractAddress is set, the DON also listens for
   // PayrollRequested events on-chain and triggers the workflow automatically.
-  if (config.triggerContractAddress && config.triggerContractAddress.length > 2) {
+  if (config.enableLogTrigger && config.triggerContractAddress && config.triggerContractAddress.length > 2) {
     const evmClient  = new cre.capabilities.EVMClient(EVMClient.SUPPORTED_CHAIN_SELECTORS["ethereum-testnet-sepolia"]);
     const logTrigger = evmClient.logTrigger({
       addresses: [config.triggerContractAddress],
       topics:    [{ values: [PAYROLL_REQUESTED_SIG] }],
     });
-    handlers.push(cre.handler(logTrigger, onLogTrigger));
+    handlers.push(handler(logTrigger, onLogTrigger));
   }
 
   return handlers;

@@ -3,6 +3,7 @@ export type Config = {
   networkLabel:             string;  // human-readable label for logs (e.g. "Sepolia Testnet")
   dispatcherAddress:        string;  // PayrollDispatcher contract (empty = skip writeReport)
   triggerContractAddress:   string;  // PayrollTrigger contract on Sepolia (empty = skip log trigger)
+  enableLogTrigger?:        boolean; // set true only on deployed DON — simulation doesn't support log triggers
   backendApiUrl:            string;  // PayFlow backend base URL (e.g. "http://localhost:3001")
   uniswapApiKey:            string;  // Uniswap Trading API key
   oracleRpc:                string;  // JSON-RPC URL for reading Chainlink feeds (Sepolia or Mainnet)

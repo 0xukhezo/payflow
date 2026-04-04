@@ -555,35 +555,43 @@ export async function executeSwap(quote, settleAddress) {
       // Router already sent tokens directly to employee in the swap tx
       transferTxHash = tx.hash;
       console.log(`[Uniswap] Output went directly to ${settleAddress} in swap tx — no separate transfer needed`);
-    } else if (netRelayerAmount > 0n) {
-      // Tokens landed in relayer — forward to employee.
-      const erc20      = new ethers.Contract(tokenOutAddress, ERC20_ABI, wallet);
-      const sendAmount = netRelayerAmount;
-      // Derive nonce from the swap tx to avoid RPC cache lag.
-      // "pending" count can still return the swap's nonce right after confirmation.
-      const nonce = tx.nonce + 1;
-      // Retry on "in-flight transaction limit reached" — Base public RPC throttles
-      // accounts with multiple pending txs; a short wait usually clears it.
-      let transferTx;
-      for (let attempt = 0; attempt <= 3; attempt++) {
-        if (attempt > 0) await new Promise(r => setTimeout(r, 3000 * attempt));
-        try {
-          transferTx = await erc20.transfer(settleAddress, sendAmount, { nonce });
-          break;
-        } catch (transferErr) {
-          const msg = transferErr?.message ?? "";
-          if (attempt < 3 && msg.includes("in-flight transaction limit")) {
-            console.warn(`[Uniswap] in-flight limit on transfer attempt ${attempt + 1}, retrying...`);
-          } else {
-            throw transferErr;
+    } else {
+      // Verify actual relayer balance — Transfer event parsing can miss direct-to-employee
+      // routes (e.g. UniswapX), causing netRelayerAmount to be non-zero even when the
+      // relayer received nothing. Clamping to actual balance prevents a reverted transfer.
+      const erc20         = new ethers.Contract(tokenOutAddress, ERC20_ABI, wallet);
+      const actualBalance = await erc20.balanceOf(wallet.address);
+      const sendAmount    = actualBalance < netRelayerAmount ? actualBalance : netRelayerAmount;
+
+      if (sendAmount === 0n) {
+        // Tokens went directly to employee or elsewhere — swap tx is the delivery proof
+        transferTxHash = tx.hash;
+        console.log(`[Uniswap] Relayer balance is 0 — tokens already delivered in swap tx, no transfer needed`);
+      } else {
+        // Tokens landed in relayer — forward to employee.
+        // Derive nonce from the swap tx to avoid RPC cache lag.
+        const nonce = tx.nonce + 1;
+        // Retry on "in-flight transaction limit reached" — Base public RPC throttles
+        // accounts with multiple pending txs; a short wait usually clears it.
+        let transferTx;
+        for (let attempt = 0; attempt <= 3; attempt++) {
+          if (attempt > 0) await new Promise(r => setTimeout(r, 3000 * attempt));
+          try {
+            transferTx = await erc20.transfer(settleAddress, sendAmount, { nonce });
+            break;
+          } catch (transferErr) {
+            const msg = transferErr?.message ?? "";
+            if (attempt < 3 && msg.includes("in-flight transaction limit")) {
+              console.warn(`[Uniswap] in-flight limit on transfer attempt ${attempt + 1}, retrying...`);
+            } else {
+              throw transferErr;
+            }
           }
         }
+        await transferTx.wait();
+        transferTxHash = transferTx.hash;
+        console.log(`[Uniswap] transferred ${sendAmount} of ${tokenOutAddress} to ${settleAddress}: ${transferTx.hash}`);
       }
-      await transferTx.wait();
-      transferTxHash = transferTx.hash;
-      console.log(`[Uniswap] transferred ${netRelayerAmount} of ${tokenOutAddress} to ${settleAddress}: ${transferTx.hash}`);
-    } else {
-      console.warn(`[Uniswap] No Transfer events to relayer or employee found in swap receipt — tokens may be stuck`);
     }
   }
 

@@ -68,10 +68,34 @@ async function getCompany(id) {
     .eq("id", id)
     .single();
   if (error || !company) return null;
+
+  // Attach splits to each employee
+  if (company.employees?.length > 0) {
+    const empIds = company.employees.map((e) => e.id);
+    const { data: splits } = await supabase
+      .from("payroll_splits")
+      .select("*")
+      .in("employee_id", empIds);
+    const splitsByEmp = {};
+    for (const s of splits ?? []) {
+      (splitsByEmp[s.employee_id] ??= []).push(s);
+    }
+    company.employees = company.employees.map((e) => ({
+      ...e,
+      splits: splitsByEmp[e.id] ?? [],
+    }));
+  }
+
   return company;
 }
 
 function shapeEmployee(e) {
+  const splits = (e.splits ?? []).map((s) => ({
+    percent:      s.percent,
+    asset:        s.asset,
+    chain_id:     s.chain_id,
+    settleAddress: s.settle_address || undefined,
+  }));
   return {
     id:               e.id,
     name:             e.name,
@@ -82,6 +106,7 @@ function shapeEmployee(e) {
     salaryAmount:     e.salary_amount,
     worldIdVerified:  e.world_id_verified,
     addedAt:          e.added_at,
+    ...(splits.length > 0 && { splits }),
   };
 }
 
@@ -498,12 +523,8 @@ router.delete("/:id/join-requests/:requestId", async (req, res) => {
 // GET /api/company/:id
 router.get("/:id", async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from("companies")
-      .select("id, name, email, payment_asset, chain_id, wallet_address, created_at, employees(*)")
-      .eq("id", req.params.id)
-      .single();
-    if (error || !data) return res.status(404).json({ error: "Company not found" });
+    const data = await getCompany(req.params.id);
+    if (!data) return res.status(404).json({ error: "Company not found" });
 
     const company = {
       ...data,

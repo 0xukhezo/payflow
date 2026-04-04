@@ -98,6 +98,7 @@ export async function runCreSimulation(triggerPayload, onProgress, timeoutMs = 9
         "--http-payload", payloadJson,
         "--non-interactive",
         "--trigger-index", "0",
+        "--target", "staging-settings",
       ],
       {
         cwd: CRE_PROJECT_DIR,
@@ -118,8 +119,9 @@ export async function runCreSimulation(triggerPayload, onProgress, timeoutMs = 9
       fullOutput += data.toString();
     });
 
-    proc.stderr.on("data", () => {
-      // suppress stderr noise from CRE CLI compile output
+    proc.stderr.on("data", (data) => {
+      const line = data.toString().trim();
+      if (line) console.error("[CRE stderr]", line);
     });
 
     proc.on("close", (code) => {

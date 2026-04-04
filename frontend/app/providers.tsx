@@ -4,7 +4,7 @@ import { createAppKit } from "@reown/appkit/react";
 import { EthersAdapter } from "@reown/appkit-adapter-ethers";
 import { SolanaAdapter } from "@reown/appkit-adapter-solana";
 import { PhantomWalletAdapter, SolflareWalletAdapter } from "@solana/wallet-adapter-wallets";
-import { arbitrum, base, baseSepolia, sepolia, solana, solanaDevnet } from "@reown/appkit/networks";
+import { sepolia, solana } from "@reown/appkit/networks";
 import { ToastProvider } from "@/components/Toast";
 import { LogoutRedirect } from "@/components/LogoutRedirect";
 import { NetworkModeProvider } from "@/lib/network-mode";
@@ -17,7 +17,7 @@ const solanaAdapter = new SolanaAdapter({
 
 createAppKit({
   adapters: [new EthersAdapter(), solanaAdapter],
-  networks: [sepolia, baseSepolia, arbitrum, base, solana, solanaDevnet],
+  networks: [sepolia, solana],
   defaultNetwork: sepolia,
   projectId,
   metadata: {
@@ -31,7 +31,6 @@ createAppKit({
     email: false,
     socials: [],
   },
-  allowUnsupportedChain: true,
 });
 
 export function Providers({ children }: { children: React.ReactNode }) {

@@ -2,7 +2,7 @@
   "toleranceBps": 8000,
   "networkLabel": "Sepolia Testnet",
   "dispatcherAddress": "0x6E035D26fe45Da426b33c9bFEdfc932F534d2483",
-  "triggerContractAddress": "",
+  "triggerContractAddress": "0x0831Cb0C52438FB25Ea4D328454ec8a8BDfD9E44",
   "backendApiUrl": "http://localhost:3001",
   "uniswapApiKey": "sxQAegI1gNFNJ3S5hYxNIwawpByhVkl4V41r2HxCZ80",
   "oracleRpc": "https://ethereum-sepolia-rpc.publicnode.com",

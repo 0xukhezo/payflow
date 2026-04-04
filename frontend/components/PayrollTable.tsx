@@ -1,13 +1,60 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ethers } from "ethers";
 import { WorldIdBadge } from "./WorldIdBadge";
 import { API_URL } from "@/lib/contracts";
 import { getNetworkByChainId } from "@/lib/networks";
 import { useToast } from "@/components/Toast";
 import { Loader2, Plus, Trash2, Pencil, Check, X } from "lucide-react";
+import Image from "next/image";
 
+const TOKEN_ICONS: Record<string, string> = {
+  eth:  "/token-eth.svg",
+  weth: "/token-eth.svg",
+  usdc: "/token-usdc.svg",
+  usdt: "/token-usdt.svg",
+  dai:  "/token-dai.svg",
+  wbtc: "/token-wbtc.svg",
+  sol:  "/token-sol.svg",
+};
+
+const CHAIN_ICONS: Record<number, string> = {
+  8453:     "/chain-base.svg",
+  84532:    "/chain-base.svg",
+  42161:    "/chain-arbitrum.svg",
+  421614:   "/chain-arbitrum.svg",
+};
+
+function TokenBadge({ asset }: { asset: string }) {
+  const key = asset.toLowerCase();
+  const icon = TOKEN_ICONS[key];
+  const label = key === "eth" ? "WETH" : asset.toUpperCase();
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {icon && <Image src={icon} alt={label} width={14} height={14} className="rounded-full" />}
+      <span className="font-mono text-xs text-gold tracking-widest">{label}</span>
+    </span>
+  );
+}
+
+function NetworkBadge({ chainId }: { chainId: number }) {
+  const icon = CHAIN_ICONS[chainId];
+  const name = getNetworkByChainId(chainId)?.shortName ?? String(chainId);
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {icon && <Image src={icon} alt={name} width={14} height={14} className="rounded-full" />}
+      <span className="font-mono text-xs text-muted">{name}</span>
+    </span>
+  );
+}
+
+interface PayrollSplit {
+  percent: number;
+  asset: string;
+  chain_id: number;
+  settleAddress?: string;
+}
 
 interface Employee {
   id: string;
@@ -17,6 +64,7 @@ interface Employee {
   settleAddress: string;
   salaryAmount: number;
   worldIdVerified?: boolean;
+  splits?: PayrollSplit[];
 }
 
 interface PayrollTableProps {
@@ -128,25 +176,23 @@ export function PayrollTable({ employees, companyId, onAddEmployee, onEmployeeRe
               </tr>
             ) : (
               employees.map((emp) => {
+                const hasSplits = emp.splits && emp.splits.length > 0 && emp.splits.reduce((s, x) => s + x.percent, 0) === 100;
                 const rowClass = !emp.worldIdVerified
                   ? "border-b border-line opacity-50"
-                  : "border-b border-line hover:bg-white/[0.02] transition-colors";
+                  : `${hasSplits ? "" : "border-b border-line"} hover:bg-white/[0.02] transition-colors`;
 
                 return (
-                  <tr key={emp.id} className={rowClass}>
+                  <React.Fragment key={emp.id}>
+                  <tr className={rowClass}>
                     <td className="py-3 px-4 text-ink font-medium">{emp.name}</td>
                     <td className="py-3 px-4 whitespace-nowrap">
                       <WorldIdBadge verified={emp.worldIdVerified ?? false} />
                     </td>
                     <td className="py-3 px-4">
-                      <span className="font-mono text-xs text-gold tracking-widest">
-                        {emp.preferredAsset.toLowerCase() === "eth" ? "WETH" : emp.preferredAsset.toUpperCase()}
-                      </span>
+                      {hasSplits ? <span className="text-faint">—</span> : <TokenBadge asset={emp.preferredAsset} />}
                     </td>
                     <td className="py-3 px-4">
-                      <span className="font-mono text-xs text-muted">
-                        {getNetworkByChainId(emp.preferredChainId ?? 11155111)?.shortName ?? "Sepolia"}
-                      </span>
+                      {hasSplits ? <span className="text-faint">—</span> : <NetworkBadge chainId={emp.preferredChainId ?? 11155111} />}
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap">
                       {editingSalaryId === emp.id ? (
@@ -188,7 +234,7 @@ export function PayrollTable({ employees, companyId, onAddEmployee, onEmployeeRe
                       )}
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap">
-                      {(() => {
+                      {hasSplits ? <span className="text-faint">—</span> : (() => {
                         const ens = ensNames.get(emp.settleAddress.toLowerCase());
                         return ens ? (
                           <div>
@@ -223,6 +269,43 @@ export function PayrollTable({ employees, companyId, onAddEmployee, onEmployeeRe
                       </button>
                     </td>
                   </tr>
+                  {hasSplits && emp.splits!.map((split, i) => {
+                    const addr = split.settleAddress || emp.settleAddress;
+                    return (
+                    <tr key={`${emp.id}-split-${i}`} className={`bg-white/[0.015] ${i === emp.splits!.length - 1 ? "border-b border-line" : ""}`}>
+                      <td className="py-1.5 px-4 pl-8">
+                        <span className="font-mono text-[10px] text-faint">↳ split {i + 1}/{emp.splits!.length}</span>
+                      </td>
+                      <td className="py-1.5 px-4" />
+                      <td className="py-1.5 px-4">
+                        <span className="inline-flex items-center gap-1.5">
+                          <TokenBadge asset={split.asset} />
+                          <span className="font-mono text-[10px] text-faint">{split.percent}%</span>
+                        </span>
+                      </td>
+                      <td className="py-1.5 px-4">
+                        <NetworkBadge chainId={split.chain_id} />
+                      </td>
+                      <td className="py-1.5 px-4">
+                        <span className="font-mono text-xs text-muted">
+                          ${((emp.salaryAmount * split.percent) / 100).toFixed(2)}
+                        </span>
+                      </td>
+                      <td className="py-1.5 px-4 whitespace-nowrap">
+                        <code className="font-mono text-[10px] text-muted">
+                          {addr.slice(0, 8)}…{addr.slice(-6)}
+                        </code>
+                        {!split.settleAddress && (
+                          <span className="font-mono text-[9px] text-faint ml-1">(main)</span>
+                        )}
+                      </td>
+                      <td className="py-1.5 px-4" />
+                      <td className="py-1.5 px-4" />
+                      <td className="py-1.5 px-2" />
+                    </tr>
+                    );
+                  })}
+                  </React.Fragment>
                 );
               })
             )}

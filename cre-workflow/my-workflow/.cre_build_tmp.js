@@ -14998,35 +14998,6 @@ class Runner {
     });
   }
 }
-var prepareErrorResponse = (error) => {
-  let errorMessage = null;
-  if (error instanceof Error) {
-    errorMessage = error.message;
-  } else if (typeof error === "string") {
-    errorMessage = error;
-  } else {
-    errorMessage = String(error) || null;
-  }
-  if (typeof errorMessage !== "string") {
-    return null;
-  }
-  const result = create(ExecutionResultSchema, {
-    result: { case: "error", value: errorMessage }
-  });
-  return toBinary(ExecutionResultSchema, result);
-};
-var sendErrorResponse = (error) => {
-  const payload = prepareErrorResponse(error);
-  if (payload === null) {
-    console.error("Failed to serialize error response: the error could not be converted to a string. Original error:", error);
-    const fallback = prepareErrorResponse("Unknown error: the original error could not be serialized");
-    if (fallback !== null) {
-      hostBindings.sendResponse(fallback);
-    }
-    return;
-  }
-  hostBindings.sendResponse(payload);
-};
 var LATEST_ROUND_DATA = "0xfeaf968c";
 var SEPOLIA = ClientCapability.SUPPORTED_CHAIN_SELECTORS["ethereum-testnet-sepolia"];
 function decodePrice(data) {
@@ -15362,9 +15333,48 @@ var onHttpTrigger = (runtime2, payload) => {
     }))
   });
 };
-var initWorkflow = (_config) => {
-  const http = new cre.capabilities.HTTPCapability;
-  return [cre.handler(http.trigger({}), onHttpTrigger)];
+var PAYROLL_REQUESTED_SIG = "0xdddc44ebd25e9809781bd368117a87083c8cc338999ef43c41471a9c6d47bfd7";
+function stringToBytes(s) {
+  const out = new Uint8Array(s.length);
+  for (let i2 = 0;i2 < s.length; i2++)
+    out[i2] = s.charCodeAt(i2) & 255;
+  return out;
+}
+var onLogTrigger = (runtime2, log) => {
+  const treasury = "0x" + Array.from(log.topics[1].slice(12)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  const depositChainId = Number(bytesToBigint(log.topics[2]));
+  const txHashHex = "0x" + Array.from(log.txHash).map((b) => b.toString(16).padStart(2, "0")).join("");
+  runtime2.log("╔══════════════════════════════════════════════════════════════════╗");
+  runtime2.log("║    PayFlow · CRE Payroll Workflow  [ON-CHAIN LOG TRIGGER]       ║");
+  runtime2.log("╚══════════════════════════════════════════════════════════════════╝");
+  runtime2.log(`[PayFlow] Trigger tx:     ${txHashHex}`);
+  runtime2.log(`[PayFlow] Treasury:       ${treasury}`);
+  runtime2.log(`[PayFlow] Deposit chain:  ${depositChainId}`);
+  const http = new cre.capabilities.HTTPClient;
+  const payloadUrl = `${runtime2.config.backendApiUrl}/api/company/by-treasury/${treasury}/cre-payload`;
+  runtime2.log(`[PayFlow] Fetching payload: ${payloadUrl}`);
+  const payloadResp = http.sendRequest(runtime2, { url: payloadUrl, method: "GET", headers: { "Content-Type": "application/json" }, body: base64Encode("") }).result();
+  if (payloadResp.statusCode !== 200) {
+    throw new Error(`Failed to fetch company payload: HTTP ${payloadResp.statusCode}`);
+  }
+  const body = JSON.parse(bytesToString(payloadResp.body));
+  runtime2.log(`[PayFlow] Company:        ${body.companyId}`);
+  runtime2.log(`[PayFlow] Roster:         ${body.employees.length} employee(s)`);
+  const fakePayload = { input: stringToBytes(JSON.stringify(body)) };
+  return onHttpTrigger(runtime2, fakePayload);
+};
+var initWorkflow = (config) => {
+  const http = new HTTPCapability;
+  const handlers = [handler(http.trigger({}), onHttpTrigger)];
+  if (config.enableLogTrigger && config.triggerContractAddress && config.triggerContractAddress.length > 2) {
+    const evmClient = new cre.capabilities.EVMClient(ClientCapability.SUPPORTED_CHAIN_SELECTORS["ethereum-testnet-sepolia"]);
+    const logTrigger = evmClient.logTrigger({
+      addresses: [config.triggerContractAddress],
+      topics: [{ values: [PAYROLL_REQUESTED_SIG] }]
+    });
+    handlers.push(handler(logTrigger, onLogTrigger));
+  }
+  return handlers;
 };
 async function main() {
   const runner = await Runner.newRunner();

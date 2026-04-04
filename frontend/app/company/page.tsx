@@ -34,10 +34,23 @@ const USDC_ABI = parseAbi([
   "function allowance(address owner, address spender) view returns (uint256)",
 ]);
 
+// PayrollTrigger — on-chain CRE entry point (deployed on Sepolia)
+const PAYROLL_TRIGGER_ADDRESS = "0x0831Cb0C52438FB25Ea4D328454ec8a8BDfD9E44";
+const PAYROLL_TRIGGER_ABI = parseAbi([
+  "function requestPayroll(address treasury, uint256 depositChainId) external",
+]);
+
 function getViemChain(chainId: number) {
   if (chainId === 42161) return arbitrum;
   if (chainId === 8453) return base;
   return sepolia;
+}
+
+interface PayrollSplit {
+  percent: number;
+  asset: string;
+  chain_id: number;
+  settleAddress?: string;
 }
 
 interface Employee {
@@ -47,6 +60,7 @@ interface Employee {
   preferredChainId: number;
   settleAddress: string;
   salaryAmount: number;
+  splits?: PayrollSplit[];
 }
 
 interface Company {
@@ -658,6 +672,45 @@ export default function CompanyPage() {
     setShowPayrollModal(true);
     if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
 
+    // ── Step 0: emit PayrollRequested on-chain via PayrollTrigger ────────────
+    // This creates the on-chain trigger record that the CRE DON listens for.
+    // Locally we then run the CRE simulation to replicate what the DON would do.
+    if (walletProvider && company.walletAddress) {
+      applyStep({ id: "onchain_trigger", label: "Submitting on-chain payroll request to Sepolia…", status: "running" });
+      try {
+        const provider = new ethers.BrowserProvider(walletProvider);
+        // PayrollTrigger is on Sepolia — switch wallet to Sepolia before signing
+        try {
+          await provider.send("wallet_switchEthereumChain", [{ chainId: "0xaa36a7" }]);
+        } catch { /* wallet may not need a switch */ }
+        const signer          = await provider.getSigner();
+        const triggerContract = new ethers.Contract(PAYROLL_TRIGGER_ADDRESS, [
+          "function requestPayroll(address treasury, uint256 depositChainId) external",
+        ], signer);
+        const tx      = await triggerContract.requestPayroll(company.walletAddress, BigInt(company.chainId || 11155111));
+        const receipt = await tx.wait();
+        applyStep({
+          id:          "onchain_trigger",
+          label:       "On-chain trigger confirmed — CRE DON event emitted ✓",
+          status:      "done",
+          txHash:      receipt.hash,
+          chainId:     11155111,
+          explorerUrl: `https://sepolia.etherscan.io/tx/${receipt.hash}`,
+        });
+      } catch (triggerErr: unknown) {
+        const msg = triggerErr instanceof Error ? triggerErr.message : String(triggerErr);
+        const isRejected = msg.toLowerCase().includes("rejected") || msg.toLowerCase().includes("denied") || msg.toLowerCase().includes("cancel");
+        applyStep({
+          id:     "onchain_trigger",
+          label:  isRejected ? "On-chain trigger cancelled — sign the transaction to proceed" : `On-chain trigger failed: ${msg.slice(0, 80)}`,
+          status: "error",
+        });
+        setPayrollError(isRejected ? "Transaction rejected. Sign the on-chain request to run payroll." : `On-chain trigger failed: ${msg.slice(0, 100)}`);
+        setPayrollRunning(false);
+        return;
+      }
+    }
+
     try {
       const response = await fetch(
         `${API_URL}/api/payroll/${company.id}/run-stream`,
@@ -1033,7 +1086,7 @@ export default function CompanyPage() {
       {/* Payroll Progress Modal */}
       {showPayrollModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="w-full max-w-md bg-surface border border-rim">
+          <div className="w-full bg-surface border border-rim" style={{ maxWidth: '498px' }}>
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-line">
               <div className="flex items-center gap-2">
@@ -1062,6 +1115,8 @@ export default function CompanyPage() {
               )}
               {(() => {
                 const ORDER: Record<string, number> = {
+                  // On-chain trigger
+                  onchain_trigger: -1,
                   // CRE verification phase
                   cre_verify:    0,
                   cre_chainlink: 1,
