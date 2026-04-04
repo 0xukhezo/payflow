@@ -1,61 +1,8 @@
 import { Router } from "express";
 import { randomUUID } from "crypto";
-import { ethers } from "ethers";
 import { supabase } from "../db/supabase.js";
 import { getRelayerAddress, getTreasuryBalance } from "../services/dynamic.js";
 import { SUPPORTED_CHAIN_IDS, SOLANA_CHAIN_ID, getToken } from "../config/networks.js";
-
-const ENS_REGISTRY = "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e";
-
-async function fetchEnsProfileByName(ensName, chainId) {
-  const isSepolia = Number(chainId) === 11155111;
-  const rpcUrl = isSepolia
-    ? (process.env.SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com")
-    : (process.env.ETHEREUM_RPC_URL || "https://cloudflare-eth.com");
-  const provider = isSepolia
-    ? new ethers.JsonRpcProvider(rpcUrl, { chainId: 11155111, name: "sepolia", ensAddress: ENS_REGISTRY })
-    : new ethers.JsonRpcProvider(rpcUrl, "mainnet");
-  try {
-    const resolver = await provider.getResolver(ensName);
-    if (!resolver) return null;
-    const [splitsRaw, solRaw] = await Promise.all([
-      resolver.getText("com.payflow.splits").catch(() => null),
-      resolver.getText("com.payflow.solanaAddress").catch(() => null),
-    ]);
-    let splits = null;
-    try { if (splitsRaw) splits = JSON.parse(splitsRaw); } catch {}
-    return { ensName, splits, solanaAddress: solRaw || null };
-  } catch {
-    return null;
-  }
-}
-
-async function fetchEnsProfile(address, chainId) {
-  const isSepolia = Number(chainId) === 11155111;
-  const rpcUrl = isSepolia
-    ? (process.env.SEPOLIA_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com")
-    : (process.env.ETHEREUM_RPC_URL || "https://cloudflare-eth.com");
-
-  const provider = isSepolia
-    ? new ethers.JsonRpcProvider(rpcUrl, { chainId: 11155111, name: "sepolia", ensAddress: ENS_REGISTRY })
-    : new ethers.JsonRpcProvider(rpcUrl, "mainnet");
-
-  try {
-    const ensName = await provider.lookupAddress(address);
-    if (!ensName) return null;
-    const resolver = await provider.getResolver(ensName);
-    if (!resolver) return null;
-    const [splitsRaw, solRaw] = await Promise.all([
-      resolver.getText("com.payflow.splits").catch(() => null),
-      resolver.getText("com.payflow.solanaAddress").catch(() => null),
-    ]);
-    let splits = null;
-    try { if (splitsRaw) splits = JSON.parse(splitsRaw); } catch {}
-    return { ensName, splits, solanaAddress: solRaw || null };
-  } catch {
-    return null;
-  }
-}
 
 const router = Router();
 
@@ -144,7 +91,7 @@ router.post("/onboard", async (req, res) => {
 router.get("/join-requests/by-address/:address", async (req, res) => {
   const { data, error } = await supabase
     .from("join_requests")
-    .select("id, company_id, employee_name, preferred_asset, preferred_chain_id, ens_name, solana_address, created_at, companies(name)")
+    .select("id, company_id, employee_name, preferred_asset, preferred_chain_id, solana_address, created_at, companies(name)")
     .ilike("employee_address", req.params.address)
     .eq("status", "pending")
     .order("created_at", { ascending: false })
@@ -159,7 +106,6 @@ router.get("/join-requests/by-address/:address", async (req, res) => {
       companyName:      data.companies?.name ?? "Unknown",
       employeeName:     data.employee_name,
       preferredAsset:   data.preferred_asset,
-      ensName:          data.ens_name || null,
       solanaAddress:    data.solana_address || null,
       createdAt:        data.created_at,
     },
@@ -372,7 +318,7 @@ router.get("/:id/wallet", async (req, res) => {
 
 // POST /api/company/:id/join-requests  — employee requests to join
 router.post("/:id/join-requests", async (req, res) => {
-  const { employeeName, employeeAddress, preferredAsset, preferredChainId, ensName, solanaAddress, ensSplits } = req.body;
+  const { employeeName, employeeAddress, preferredAsset, preferredChainId, solanaAddress } = req.body;
   if (!employeeName || !employeeAddress) {
     return res.status(400).json({ error: "employeeName and employeeAddress required" });
   }
@@ -394,9 +340,7 @@ router.post("/:id/join-requests", async (req, res) => {
       employee_address:  employeeAddress.toLowerCase(),
       preferred_asset:   (preferredAsset || "usdc").toLowerCase(),
       preferred_chain_id: Number(preferredChainId) || 11155111,
-      ens_name:          ensName ? ensName.trim().toLowerCase() : null,
       solana_address:    solanaAddress ? solanaAddress.trim() : null,
-      ens_splits:        Array.isArray(ensSplits) && ensSplits.length > 0 ? ensSplits : null,
     })
     .select()
     .single();
@@ -420,9 +364,7 @@ router.get("/:id/join-requests", async (req, res) => {
       employeeAddress:  r.employee_address,
       preferredAsset:   r.preferred_asset,
       preferredChainId: r.preferred_chain_id,
-      ensName:          r.ens_name || null,
       solanaAddress:    r.solana_address || null,
-      ensSplits:        r.ens_splits || null,
       createdAt:        r.created_at,
     })),
   });
@@ -475,7 +417,6 @@ router.post("/:id/join-requests/:requestId/accept", async (req, res) => {
     preferred_asset:   jr.preferred_asset,
     preferred_chain_id: jr.preferred_chain_id || company?.chain_id || 11155111,
     settle_address:    jr.employee_address,
-    // Use explicitly provided solana address from join request, ENS profile will update if needed
     solana_address:    jr.solana_address || null,
     salary_amount:     Number(salaryAmount),
     world_id_verified: !!preVerified || !!existingVerified,
@@ -484,30 +425,7 @@ router.post("/:id/join-requests/:requestId/accept", async (req, res) => {
 
   await supabase.from("join_requests").update({ status: "accepted" }).eq("id", req.params.requestId);
 
-  // Auto-apply ENS splits — use stored ens_name if provided, else reverse-lookup
-  const ensProfile = jr.ens_name
-    ? await fetchEnsProfileByName(jr.ens_name, company?.chain_id || DEFAULT_CHAIN_ID)
-    : await fetchEnsProfile(jr.employee_address, company?.chain_id || DEFAULT_CHAIN_ID);
-  if (ensProfile?.splits?.length > 0) {
-    const total = ensProfile.splits.reduce((s, x) => s + (Number(x.percent) || 0), 0);
-    if (total === 100) {
-      // ENS solana address wins over manually entered one if present
-      const finalSolanaAddress = ensProfile.solanaAddress || jr.solana_address;
-      if (finalSolanaAddress) {
-        await supabase.from("employees").update({ solana_address: finalSolanaAddress }).eq("id", employeeId);
-      }
-      const rows = ensProfile.splits.map((s) => ({
-        employee_id: employeeId,
-        percent:     Number(s.percent),
-        asset:       String(s.asset).toLowerCase(),
-        chain_id:    Number(s.chain_id),
-      }));
-      await supabase.from("payroll_splits").insert(rows);
-      console.log(`[accept] Applied ${rows.length} ENS splits for ${ensProfile.ensName}`);
-    }
-  }
-
-  res.json({ ok: true, employeeId, ensProfile: ensProfile ? { ensName: ensProfile.ensName, splitsApplied: ensProfile.splits?.length ?? 0 } : null });
+  res.json({ ok: true, employeeId });
 });
 
 // DELETE /api/company/:id/join-requests/:requestId  — reject/dismiss

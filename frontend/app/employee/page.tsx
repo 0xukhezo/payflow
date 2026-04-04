@@ -1,9 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useAppKitAccount, useAppKitProvider } from "@reown/appkit/react";
-import type { Eip1193Provider } from "ethers";
-import { ethers } from "ethers";
+import { useAppKitAccount } from "@reown/appkit/react";
 import { createPublicClient, http, parseAbi } from "viem";
 import { AuthGate } from "@/components/AuthGate";
 import {
@@ -23,7 +21,7 @@ import { getNetworkByChainId } from "@/lib/networks";
 import { friendlyError } from "@/lib/errors";
 import { API_URL } from "@/lib/contracts";
 import { useToast } from "@/components/Toast";
-import { Loader2, Pencil, Plus, Trash2, Link, CheckCircle } from "lucide-react";
+import { Loader2, Pencil, Plus, Trash2, CheckCircle } from "lucide-react";
 
 const ERC20_BALANCE_ABI = parseAbi([
   "function balanceOf(address) view returns (uint256)",
@@ -46,10 +44,6 @@ interface EmployeeRecord {
   company: { id: string; name: string; paymentAsset: string };
 }
 
-const ENS_RESOLVER_ABI = [
-  "function setText(bytes32 node, string key, string value) external",
-];
-const MAINNET_RPC = "https://ethereum-rpc.publicnode.com";
 
 export default function EmployeePage() {
   const { address: evmAddress, isConnected: evmConnected } = useAppKitAccount({
@@ -57,8 +51,6 @@ export default function EmployeePage() {
   });
   const { address: solanaWalletAddress, isConnected: solanaConnected } =
     useAppKitAccount({ namespace: "solana" });
-  const { walletProvider } = useAppKitProvider<Eip1193Provider>("eip155");
-
   // Prefer EVM address for primary identity; fall back to Solana-only
   const activeAddress = evmAddress || solanaWalletAddress;
   const isConnected = evmConnected || solanaConnected;
@@ -93,26 +85,9 @@ export default function EmployeePage() {
   const [savingSplits, setSavingSplits] = useState(false);
   const [solanaAddress, setSolanaAddress] = useState("");
 
-  // ENS publish state
-  const [ensName, setEnsName] = useState("");
-  const [ensPublishing, setEnsPublishing] = useState(false);
-  const [ensPublished, setEnsPublished] = useState(false);
-  const [ensNameError, setEnsNameError] = useState<string | null>(null);
-  const [ensSyncingPayments, setEnsSyncingPayments] = useState(false);
-  const [ensSyncedPayments, setEnsSyncedPayments] = useState(false);
-
   // Join request state (employee-initiated)
   const [joinName, setJoinName] = useState("");
-  const [joinEnsName, setJoinEnsName] = useState("");
-  const [joinEnsResolving, setJoinEnsResolving] = useState(false);
-  const [joinEnsResolved, setJoinEnsResolved] = useState<{
-    address: string;
-    splits: { percent: number; asset: string; chain_id: number }[] | null;
-    solanaAddress?: string | null;
-  } | null>(null);
   const [joinSolanaAddress, setJoinSolanaAddress] = useState("");
-  const [joinEnsError, setJoinEnsError] = useState<string | null>(null);
-  const joinEnsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [joinCompanyQuery, setJoinCompanyQuery] = useState("");
   const [joinCompanyResults, setJoinCompanyResults] = useState<
     { id: string; name: string; chain_id: number }[]
@@ -130,7 +105,6 @@ export default function EmployeePage() {
     companyId: string;
     companyName: string;
     employeeName: string;
-    ensName: string | null;
     solanaAddress: string | null;
     createdAt: string;
   } | null>(null);
@@ -375,219 +349,6 @@ export default function EmployeePage() {
     }
   };
 
-  const handlePublishToEns = async () => {
-    if (!ensName.includes(".")) {
-      setEnsNameError("Enter a valid ENS name (e.g. yourname.eth)");
-      return;
-    }
-    if (!walletProvider || !evmAddress) {
-      setEnsNameError("Connect an EVM wallet to publish");
-      return;
-    }
-    setEnsPublishing(true);
-    setEnsNameError(null);
-    setEnsPublished(false);
-    try {
-      // 1. Verify ENS name resolves to this wallet
-      const r = await fetch(
-        `${API_URL}/api/ens/${encodeURIComponent(ensName)}?network=${mode === "mainnet" ? "mainnet" : "sepolia"}`,
-      );
-      const data = await r.json();
-      if (!r.ok) {
-        setEnsNameError(data.error || "ENS name not found");
-        return;
-      }
-      if (data.address.toLowerCase() !== evmAddress.toLowerCase()) {
-        setEnsNameError(
-          "This ENS name resolves to a different address than your connected wallet",
-        );
-        return;
-      }
-
-      // 2. Get the resolver address for this name via public mainnet RPC
-      const mainnetProvider = new ethers.JsonRpcProvider(
-        MAINNET_RPC,
-        "mainnet",
-      );
-      const resolver = await mainnetProvider.getResolver(ensName);
-      if (!resolver) {
-        setEnsNameError(
-          "No resolver set for this ENS name — set one via the ENS app first",
-        );
-        return;
-      }
-
-      // 3. Switch wallet to Ethereum mainnet if needed
-      const browserProvider = new ethers.BrowserProvider(walletProvider);
-      const network = await browserProvider.getNetwork();
-      if (Number(network.chainId) !== 1) {
-        await walletProvider.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: "0x1" }],
-        });
-      }
-      // Re-create provider after potential chain switch so it picks up the new chain
-      const activeProvider = new ethers.BrowserProvider(walletProvider);
-      const signer = await activeProvider.getSigner();
-
-      // 4. Call setText on the resolver
-      const resolverContract = new ethers.Contract(
-        resolver.address,
-        ENS_RESOLVER_ABI,
-        signer,
-      );
-      const node = ethers.namehash(ensName);
-
-      const tx1 = await resolverContract.setText(
-        node,
-        "com.payflow.splits",
-        JSON.stringify(splits),
-      );
-      await tx1.wait(1);
-
-      // 5. Publish solana address if there's a SOL split
-      const hasSol = splits.some((s) => s.asset === "sol");
-      if (hasSol && solanaAddress.trim()) {
-        const tx2 = await resolverContract.setText(
-          node,
-          "com.payflow.solanaAddress",
-          solanaAddress.trim(),
-        );
-        await tx2.wait(1);
-      }
-
-      setEnsPublished(true);
-      toast("success", "Payment profile published to ENS.");
-    } catch (err: unknown) {
-      setEnsNameError(friendlyError(err));
-    } finally {
-      setEnsPublishing(false);
-    }
-  };
-
-  const handleSyncPaymentsToEns = async () => {
-    if (!ensName.includes(".")) {
-      setEnsNameError("Enter a valid ENS name first");
-      return;
-    }
-    if (!walletProvider || !evmAddress) {
-      setEnsNameError("Connect an EVM wallet to sync");
-      return;
-    }
-    setEnsSyncingPayments(true);
-    setEnsNameError(null);
-    setEnsSyncedPayments(false);
-    try {
-      // 1. Fetch payment history
-      const r = await fetch(`${API_URL}/api/employee/${evmAddress}/history`);
-      if (!r.ok) throw new Error("Failed to fetch payment history");
-      const { payments } = await r.json();
-      if (!payments?.length) throw new Error("No payment history to sync");
-
-      // 2. Format as compact array (last 20, completed only)
-      const completed = (
-        payments as {
-          date: string;
-          amount: string;
-          asset: string;
-          transferTxHash?: string;
-          status: string;
-        }[]
-      )
-        .filter((p) => p.status === "completed" || p.status === "sent")
-        .slice(0, 20)
-        .map((p) => ({
-          date: p.date ? new Date(p.date).toISOString().split("T")[0] : "—",
-          amount: p.amount,
-          asset: p.asset?.toUpperCase() ?? "—",
-          ...(p.transferTxHash ? { tx: p.transferTxHash } : {}),
-        }));
-      if (!completed.length) throw new Error("No completed payments to sync");
-
-      // 3. Get resolver
-      const mainnetProvider = new ethers.JsonRpcProvider(
-        MAINNET_RPC,
-        "mainnet",
-      );
-      const resolver = await mainnetProvider.getResolver(ensName);
-      if (!resolver) throw new Error("No resolver set for this ENS name");
-
-      // 4. Switch to mainnet and sign
-      const browserProvider = new ethers.BrowserProvider(walletProvider);
-      const network = await browserProvider.getNetwork();
-      if (Number(network.chainId) !== 1) {
-        await walletProvider.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: "0x1" }],
-        });
-      }
-      // Re-create provider after potential chain switch
-      const activeProvider = new ethers.BrowserProvider(walletProvider);
-      const signer = await activeProvider.getSigner();
-      const resolverContract = new ethers.Contract(
-        resolver.address,
-        ENS_RESOLVER_ABI,
-        signer,
-      );
-      const node = ethers.namehash(ensName);
-
-      // 5. Write com.payflow.payments
-      const tx = await resolverContract.setText(
-        node,
-        "com.payflow.payments",
-        JSON.stringify(completed),
-      );
-      await tx.wait(1);
-
-      setEnsSyncedPayments(true);
-      toast(
-        "success",
-        `${completed.length} payment${completed.length > 1 ? "s" : ""} synced to ENS.`,
-      );
-    } catch (err: unknown) {
-      setEnsNameError(friendlyError(err));
-    } finally {
-      setEnsSyncingPayments(false);
-    }
-  };
-
-  // Auto-resolve ENS name from connected wallet when the join form appears.
-  // Always use mainnet for reverse lookup — primary names are registered there.
-  useEffect(() => {
-    if (record !== "not-found" || !evmAddress || joinEnsName) return;
-    const provider = new ethers.JsonRpcProvider(
-      "https://cloudflare-eth.com",
-      "mainnet",
-    );
-    provider
-      .lookupAddress(evmAddress)
-      .then((name) => {
-        if (!name) return;
-        // Set the field value then trigger the full ENS fetch (splits etc.)
-        setJoinEnsName(name);
-        setJoinEnsResolving(true);
-        setJoinEnsResolved(null);
-        setJoinEnsError(null);
-        fetch(
-          `${API_URL}/api/ens/${encodeURIComponent(name)}?network=${mode === "mainnet" ? "mainnet" : "sepolia"}`,
-        )
-          .then((r) => r.json())
-          .then((data) => {
-            if (data.address) {
-              setJoinEnsResolved({
-                address: data.address,
-                splits: data.splits,
-                solanaAddress: data.solanaAddress,
-              });
-              if (data.solanaAddress) setJoinSolanaAddress(data.solanaAddress);
-            }
-          })
-          .catch(() => {})
-          .finally(() => setJoinEnsResolving(false));
-      })
-      .catch(() => {});
-  }, [record, evmAddress]);
-
   // Company search debounce
   const joinSearchRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleJoinCompanyQuery = (value: string) => {
@@ -610,44 +371,6 @@ export default function EmployeePage() {
         setJoinSearching(false);
       }
     }, 400);
-  };
-
-  const handleJoinEnsName = (value: string) => {
-    setJoinEnsName(value);
-    setJoinEnsResolved(null);
-    setJoinEnsError(null);
-    if (joinEnsDebounceRef.current) clearTimeout(joinEnsDebounceRef.current);
-    if (!value.includes(".") || value.startsWith("0x")) return;
-    setJoinEnsResolving(true);
-    joinEnsDebounceRef.current = setTimeout(async () => {
-      try {
-        const r = await fetch(
-          `${API_URL}/api/ens/${encodeURIComponent(value)}?network=${mode === "mainnet" ? "mainnet" : "sepolia"}`,
-        );
-        const data = await r.json();
-        if (!r.ok) {
-          setJoinEnsError(data.error || "Name not found");
-          return;
-        }
-        if (data.address?.toLowerCase() !== evmAddress?.toLowerCase()) {
-          setJoinEnsError(
-            "This ENS name resolves to a different address than your wallet",
-          );
-          return;
-        }
-        setJoinEnsResolved({
-          address: data.address,
-          splits: data.splits,
-          solanaAddress: data.solanaAddress,
-        });
-        if (data.solanaAddress) setJoinSolanaAddress(data.solanaAddress);
-        setJoinEnsError(null);
-      } catch {
-        setJoinEnsError("Could not resolve ENS name");
-      } finally {
-        setJoinEnsResolving(false);
-      }
-    }, 600);
   };
 
   const handleSubmitJoinRequest = async () => {
@@ -676,11 +399,7 @@ export default function EmployeePage() {
             employeeAddress: evmAddress,
             preferredAsset: "usdc",
             preferredChainId: 11155111,
-            ensName: joinEnsResolved ? joinEnsName.trim() : undefined,
             solanaAddress: joinSolanaAddress.trim() || undefined,
-            ensSplits: joinEnsResolved?.splits?.length
-              ? joinEnsResolved.splits
-              : undefined,
           }),
         },
       );
@@ -868,16 +587,6 @@ export default function EmployeePage() {
                       {pendingRequest?.employeeName ?? joinName}
                     </span>
                   </div>
-                  {(pendingRequest?.ensName ?? joinEnsName) && (
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-[10px] text-muted">
-                        ENS
-                      </span>
-                      <span className="font-mono text-xs text-gold">
-                        {pendingRequest?.ensName ?? joinEnsName}
-                      </span>
-                    </div>
-                  )}
                   {(pendingRequest?.solanaAddress ?? joinSolanaAddress) && (
                     <div className="flex items-center justify-between gap-4">
                       <span className="font-mono text-[10px] text-muted shrink-0">
@@ -922,52 +631,6 @@ export default function EmployeePage() {
                 </div>
                 <div>
                   <div className="section-label mb-1">
-                    Your ENS name{" "}
-                    <span className="text-faint normal-case font-sans font-normal tracking-normal">
-                      (optional — auto-applies your payment splits)
-                    </span>
-                  </div>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={joinEnsName}
-                      onChange={(e) => handleJoinEnsName(e.target.value)}
-                      placeholder="yourname.eth"
-                      className="w-full px-3 py-2 bg-overlay border border-rim text-ink font-ui text-sm placeholder:text-placeholder focus:outline-none focus:border-gold"
-                    />
-                    {joinEnsResolving && (
-                      <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-muted" />
-                    )}
-                  </div>
-                  {joinEnsResolved && (
-                    <div className="mt-1.5 px-2.5 py-1.5 bg-teal/5 border border-teal/20 font-mono text-[10px] text-teal space-y-0.5">
-                      <div className="flex items-center gap-1 font-bold">
-                        <CheckCircle className="w-3 h-3 shrink-0" />
-                        ENS PROFILE FOUND
-                      </div>
-                      {joinEnsResolved.splits &&
-                      joinEnsResolved.splits.length > 0 ? (
-                        joinEnsResolved.splits.map((s, i) => (
-                          <div key={i} className="text-muted">
-                            {s.percent}% → {s.asset.toUpperCase()} (chain{" "}
-                            {s.chain_id})
-                          </div>
-                        ))
-                      ) : (
-                        <div className="text-muted">
-                          Address verified — no splits set yet
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {joinEnsError && (
-                    <p className="mt-1 font-mono text-[10px] text-red">
-                      {joinEnsError}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <div className="section-label mb-1">
                     Solana address{" "}
                     <span className="text-faint normal-case font-sans font-normal tracking-normal">
                       (optional — for SOL payouts)
@@ -977,7 +640,7 @@ export default function EmployeePage() {
                     type="text"
                     value={joinSolanaAddress}
                     onChange={(e) => setJoinSolanaAddress(e.target.value)}
-                    placeholder="7xKX… (auto-filled from ENS if set)"
+                    placeholder="7xKX…"
                     className="w-full px-3 py-2 bg-overlay border border-rim text-ink font-ui text-sm placeholder:text-placeholder focus:outline-none focus:border-gold font-mono"
                   />
                   {solanaWalletAddress &&
@@ -1379,120 +1042,6 @@ export default function EmployeePage() {
                 </div>
               </div>
             )}
-          </div>
-        )}
-
-        {/* ENS Payment Profile — publish splits on-chain */}
-        {record !== "not-found" && splits.length > 0 && evmConnected && (
-          <div className="bg-surface border border-line">
-            <div className="px-6 py-4 border-b border-line flex items-center gap-3">
-              <div className="flex-1">
-                <div className="section-label mb-1">ENS</div>
-                <div className="font-heading text-base font-bold text-ink">
-                  Publish Payment Profile
-                </div>
-              </div>
-              <Link className="w-4 h-4 text-muted" />
-            </div>
-            <div className="px-6 py-5 space-y-4">
-              <p className="text-xs text-muted leading-relaxed">
-                Store your payout splits on your ENS name. Any company that adds
-                you by ENS will automatically load your preferences — no manual
-                setup needed.
-              </p>
-
-              <div className="px-3 py-2.5 bg-overlay border border-rim space-y-1">
-                {splits.map((s, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-2 font-mono text-xs"
-                  >
-                    <span className="text-gold font-bold w-8">
-                      {s.percent}%
-                    </span>
-                    <span className="text-ink">
-                      {s.asset === "eth" ? "WETH" : s.asset.toUpperCase()}
-                    </span>
-                    <span className="text-muted">·</span>
-                    <span className="text-muted">
-                      {s.asset === "sol"
-                        ? "Solana"
-                        : (getNetworkByChainId(s.chain_id)?.shortName ??
-                          `chain ${s.chain_id}`)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              <div>
-                <div className="section-label mb-1">Your ENS name</div>
-                <input
-                  type="text"
-                  value={ensName}
-                  onChange={(e) => {
-                    setEnsName(e.target.value);
-                    setEnsNameError(null);
-                    setEnsPublished(false);
-                  }}
-                  placeholder="yourname.eth"
-                  className="w-full px-3 py-2 bg-overlay border border-rim text-ink font-ui text-sm placeholder:text-placeholder focus:outline-none focus:border-gold"
-                />
-                {ensNameError && (
-                  <p className="mt-1 font-mono text-[10px] text-red">
-                    {ensNameError}
-                  </p>
-                )}
-                {ensPublished && (
-                  <div className="mt-1 flex items-center gap-1.5 font-mono text-[10px] text-teal">
-                    <CheckCircle className="w-3 h-3 shrink-0" />
-                    Published on-chain — any PayFlow company can now read your
-                    splits from {ensName}
-                  </div>
-                )}
-              </div>
-
-              <button
-                onClick={handlePublishToEns}
-                disabled={ensPublishing || !ensName.trim()}
-                className="w-full py-2.5 flex items-center justify-center gap-2 bg-gold text-paper font-mono text-xs font-bold tracking-widest transition-all hover:brightness-110 disabled:opacity-40"
-              >
-                {ensPublishing ? (
-                  <>
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    PUBLISHING…
-                  </>
-                ) : (
-                  "PUBLISH TO ENS →"
-                )}
-              </button>
-
-              <div className="border-t border-line pt-4 space-y-2">
-                <div className="font-mono text-[10px] text-muted leading-relaxed">
-                  Sync your payment history on-chain as{" "}
-                  <span className="text-ink">com.payflow.payments</span> —
-                  visible to anyone who resolves your ENS name.
-                </div>
-                <button
-                  onClick={handleSyncPaymentsToEns}
-                  disabled={ensSyncingPayments || !ensName.trim()}
-                  className="w-full py-2.5 flex items-center justify-center gap-2 bg-overlay border border-rim text-ink font-mono text-xs font-bold tracking-widest transition-all hover:border-gold hover:text-gold disabled:opacity-40"
-                >
-                  {ensSyncingPayments ? (
-                    <>
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      SYNCING…
-                    </>
-                  ) : ensSyncedPayments ? (
-                    <>
-                      <CheckCircle className="w-3 h-3 text-teal" />
-                      SYNCED TO ENS
-                    </>
-                  ) : (
-                    "SYNC PAYMENT HISTORY →"
-                  )}
-                </button>
-              </div>
-            </div>
           </div>
         )}
 

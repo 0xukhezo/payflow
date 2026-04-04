@@ -116,12 +116,6 @@ export default function CompanyPage() {
   });
   const [empError, setEmpError] = useState<string | null>(null);
   const [empLoading, setEmpLoading] = useState(false);
-  const [ensResolving, setEnsResolving] = useState(false);
-  const [ensResolved, setEnsResolved] = useState<string | null>(null);
-  const [ensError, setEnsError] = useState<string | null>(null);
-  const [ensSplits, setEnsSplits] = useState<{ percent: number; asset: string; chain_id: number }[] | null>(null);
-  const [ensSolanaAddress, setEnsSolanaAddress] = useState<string | null>(null);
-  const ensDebounceRef  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollingRef      = useRef<ReturnType<typeof setInterval> | null>(null);
   const [payrollRunning, setPayrollRunning] = useState(false);
   const [payrollResult, setPayrollResult] = useState<{
@@ -176,9 +170,7 @@ export default function CompanyPage() {
     employeeAddress: string;
     preferredAsset: string;
     preferredChainId: number;
-    ensName: string | null;
     solanaAddress: string | null;
-    ensSplits: { percent: number; asset: string; chain_id: number }[] | null;
     createdAt: string;
   }
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
@@ -450,25 +442,13 @@ export default function CompanyPage() {
           preferredAsset: empForm.preferredAsset,
           preferredChainId:
             networkMode === "testnet" ? 11155111 : empForm.preferredChainId,
-          settleAddress: empForm.preferredAsset === "sol" ? "0x0000000000000000000000000000000000000000" : (ensResolved || empForm.settleAddress),
+          settleAddress: empForm.preferredAsset === "sol" ? "0x0000000000000000000000000000000000000000" : empForm.settleAddress,
           solanaAddress: empForm.preferredAsset === "sol" ? empForm.settleAddress : undefined,
           salaryAmount: Number(empForm.salaryAmount),
         }),
       });
       if (!res.ok) throw new Error(await res.text());
       const { employeeId } = await res.json();
-
-      // If ENS returned splits, apply them automatically
-      if (employeeId && ensSplits && ensSplits.length > 0) {
-        await fetch(`${API_URL}/api/employee/${employeeId}/splits`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            splits: ensSplits,
-            solanaAddress: ensSolanaAddress || undefined,
-          }),
-        });
-      }
 
       await fetchCompany(company.id);
       setEmpForm({
@@ -479,8 +459,7 @@ export default function CompanyPage() {
         salaryAmount: "",
       });
       setAddingEmployee(false);
-      const splitsNote = ensSplits ? " with ENS payment splits" : "";
-      toast("success", `${empForm.name} added to payroll${splitsNote}.`);
+      toast("success", `${empForm.name} added to payroll.`);
     } catch (err: unknown) {
       const msg = friendlyError(err);
       setEmpError(msg);
@@ -786,39 +765,6 @@ export default function CompanyPage() {
 
   const handleSettleAddressChange = (value: string) => {
     setEmpForm((f) => ({ ...f, settleAddress: value }));
-    setEnsResolved(null);
-    setEnsError(null);
-    setEnsSplits(null);
-    setEnsSolanaAddress(null);
-    if (ensDebounceRef.current) clearTimeout(ensDebounceRef.current);
-    // Only attempt ENS resolution if it looks like a name (contains a dot, not a 0x address)
-    if (value.includes(".") && !value.startsWith("0x")) {
-      setEnsResolving(true);
-      ensDebounceRef.current = setTimeout(async () => {
-        try {
-          const r = await fetch(`${API_URL}/api/ens/${encodeURIComponent(value)}?network=${networkMode === "mainnet" ? "mainnet" : "sepolia"}`);
-          const data = await r.json();
-          if (!r.ok) {
-            setEnsError(data.error || "ENS name not found");
-            return;
-          }
-          setEnsResolved(data.address);
-          setEnsError(null);
-          if (data.splits && Array.isArray(data.splits) && data.splits.length > 0) {
-            setEnsSplits(data.splits);
-          }
-          if (data.solanaAddress) {
-            setEnsSolanaAddress(data.solanaAddress);
-          }
-        } catch {
-          setEnsError("Could not resolve ENS name");
-        } finally {
-          setEnsResolving(false);
-        }
-      }, 600);
-    } else {
-      setEnsResolving(false);
-    }
   };
 
   const closeModal = () => {
@@ -831,10 +777,6 @@ export default function CompanyPage() {
       salaryAmount: "",
     });
     setEmpError(null);
-    setEnsResolved(null);
-    setEnsError(null);
-    setEnsSplits(null);
-    setEnsSolanaAddress(null);
   };
 
   /* ── Main dashboard ────────────────────────────────────────── */
@@ -1015,12 +957,6 @@ export default function CompanyPage() {
                           <td className="font-mono text-[10px] text-muted pr-4 py-0.5">Address</td>
                           <td className="font-mono text-[10px] text-ink break-all">{req.employeeAddress}</td>
                         </tr>
-                        {req.ensName && (
-                          <tr>
-                            <td className="font-mono text-[10px] text-muted pr-4 py-0.5">ENS</td>
-                            <td className="font-mono text-[10px] text-gold">{req.ensName}</td>
-                          </tr>
-                        )}
                         {req.solanaAddress && (
                           <tr>
                             <td className="font-mono text-[10px] text-muted pr-4 py-0.5">Solana</td>
@@ -1028,20 +964,8 @@ export default function CompanyPage() {
                           </tr>
                         )}
                         <tr>
-                          <td className="font-mono text-[10px] text-muted pr-4 py-0.5 align-top">Splits</td>
-                          <td className="py-0.5">
-                            {req.ensSplits && req.ensSplits.length > 0 ? (
-                              <div className="flex flex-wrap gap-1">
-                                {req.ensSplits.map((s, i) => (
-                                  <span key={i} className="font-mono text-[10px] bg-overlay border border-teal/30 px-1.5 py-0.5 text-teal">
-                                    {s.percent}% {s.asset.toUpperCase()}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="font-mono text-[10px] text-muted">{req.preferredAsset.toUpperCase()}</span>
-                            )}
-                          </td>
+                          <td className="font-mono text-[10px] text-muted pr-4 py-0.5">Asset</td>
+                          <td className="font-mono text-[10px] text-muted">{req.preferredAsset.toUpperCase()}</td>
                         </tr>
                       </tbody>
                     </table>
@@ -1416,35 +1340,16 @@ export default function CompanyPage() {
                   <span className="font-mono text-[10px] text-muted">Address</span>
                   <span className="font-mono text-[10px] text-ink">{acceptingRequest.employeeAddress.slice(0, 10)}…</span>
                 </div>
-                {acceptingRequest.ensName && (
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-[10px] text-muted">ENS</span>
-                    <span className="font-mono text-[10px] text-gold">{acceptingRequest.ensName}</span>
-                  </div>
-                )}
                 {acceptingRequest.solanaAddress && (
                   <div className="flex items-center justify-between gap-4">
                     <span className="font-mono text-[10px] text-muted shrink-0">Solana</span>
                     <span className="font-mono text-[10px] text-ink truncate">{acceptingRequest.solanaAddress}</span>
                   </div>
                 )}
-                {acceptingRequest.ensSplits && acceptingRequest.ensSplits.length > 0 ? (
-                  <div className="flex items-start justify-between gap-4">
-                    <span className="font-mono text-[10px] text-muted shrink-0">Splits</span>
-                    <div className="flex flex-wrap gap-1 justify-end">
-                      {acceptingRequest.ensSplits.map((s, i) => (
-                        <span key={i} className="font-mono text-[10px] bg-overlay border border-teal/30 px-1.5 py-0.5 text-teal">
-                          {s.percent}% {s.asset.toUpperCase()}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono text-[10px] text-muted">Prefers</span>
-                    <span className="font-mono text-[10px] text-ink">{acceptingRequest.preferredAsset.toUpperCase()}</span>
-                  </div>
-                )}
+                <div className="flex items-center justify-between">
+                  <span className="font-mono text-[10px] text-muted">Prefers</span>
+                  <span className="font-mono text-[10px] text-ink">{acceptingRequest.preferredAsset.toUpperCase()}</span>
+                </div>
               </div>
               <div>
                 <div className="section-label mb-1">Salary ({(company?.paymentAsset || "USDC").toUpperCase()})</div>
@@ -1549,46 +1454,14 @@ export default function CompanyPage() {
                 <div className="section-label mb-1">
                   {empForm.preferredAsset === "sol" ? "Solana address" : "Settlement address"}
                 </div>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={empForm.settleAddress}
-                    onChange={(e) => handleSettleAddressChange(e.target.value)}
-                    placeholder={empForm.preferredAsset === "sol" ? "e.g. 7xKX…" : "0x… or name.eth"}
-                    required
-                    className={INPUT}
-                  />
-                  {ensResolving && (
-                    <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 animate-spin text-muted" />
-                  )}
-                </div>
-                {ensResolved && (
-                  <div className="mt-1 flex items-center gap-1.5 font-mono text-[10px] text-teal">
-                    <CheckCircle className="w-3 h-3 shrink-0" />
-                    {ensResolved}
-                  </div>
-                )}
-                {ensSplits && ensSplits.length > 0 && (
-                  <div className="mt-1.5 px-2.5 py-1.5 bg-teal/5 border border-teal/20 font-mono text-[10px] text-teal space-y-0.5">
-                    <div className="flex items-center gap-1 font-bold tracking-widest mb-1">
-                      <ShieldCheck className="w-3 h-3 shrink-0" />
-                      ENS PAYMENT PROFILE DETECTED
-                    </div>
-                    {ensSplits.map((s, i) => (
-                      <div key={i} className="text-muted">
-                        {s.percent}% → {s.asset.toUpperCase()} (chain {s.chain_id})
-                      </div>
-                    ))}
-                    {ensSolanaAddress && (
-                      <div className="text-muted truncate">SOL: {ensSolanaAddress}</div>
-                    )}
-                  </div>
-                )}
-                {ensError && (
-                  <div className="mt-1 font-mono text-[10px] text-red">
-                    {ensError}
-                  </div>
-                )}
+                <input
+                  type="text"
+                  value={empForm.settleAddress}
+                  onChange={(e) => handleSettleAddressChange(e.target.value)}
+                  placeholder={empForm.preferredAsset === "sol" ? "e.g. 7xKX…" : "0x…"}
+                  required
+                  className={INPUT}
+                />
               </div>
               <div>
                 <div className="section-label mb-1">

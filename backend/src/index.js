@@ -7,7 +7,6 @@ import companyRoutes from "./routes/company.js";
 import payrollRoutes from "./routes/payroll.js";
 import employeeRoutes from "./routes/employee.js";
 import worldidRoutes from "./routes/worldid.js";
-import ensRoutes from "./routes/ens.js";
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -23,7 +22,6 @@ app.use("/api/company", companyRoutes);
 app.use("/api/payroll", payrollRoutes);
 app.use("/api/employee", employeeRoutes);
 app.use("/api/worldid", worldidRoutes);
-app.use("/api/ens", ensRoutes);
 
 app.listen(PORT, () => {
   console.log(`PayFlow backend running on port ${PORT}`);

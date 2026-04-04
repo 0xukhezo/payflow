@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { ethers } from "ethers";
+import React, { useState } from "react";
 import { WorldIdBadge } from "./WorldIdBadge";
 import { API_URL } from "@/lib/contracts";
 import { getNetworkByChainId } from "@/lib/networks";
@@ -79,35 +78,9 @@ interface PayrollTableProps {
 export function PayrollTable({ employees, companyId, onAddEmployee, onEmployeeRemoved, onSalaryUpdated }: PayrollTableProps) {
   const toast = useToast();
   const [removingId, setRemovingId] = useState<string | null>(null);
-  const [ensNames, setEnsNames] = useState<Map<string, string>>(new Map());
   const [editingSalaryId, setEditingSalaryId] = useState<string | null>(null);
   const [salaryDraft, setSalaryDraft] = useState("");
   const [savingSalaryId, setSavingSalaryId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!employees.length) return;
-    const sepoliaProvider = new ethers.JsonRpcProvider(
-      "https://ethereum-sepolia-rpc.publicnode.com",
-      { chainId: 11155111, name: "sepolia", ensAddress: "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e" }
-    );
-    const addresses = employees.map((e) => e.settleAddress).filter(Boolean);
-    Promise.all(
-      addresses.map(async (addr) => {
-        try {
-          const name = await sepoliaProvider.lookupAddress(addr);
-          return [addr, name] as [string, string | null];
-        } catch {
-          return [addr, null] as [string, null];
-        }
-      })
-    ).then((entries) => {
-      const map = new Map<string, string>();
-      for (const [addr, name] of entries) {
-        if (name) map.set(addr.toLowerCase(), name);
-      }
-      setEnsNames(map);
-    });
-  }, [employees]);
 
   const removeEmployee = async (employeeId: string) => {
     setRemovingId(employeeId);
@@ -235,21 +208,11 @@ export function PayrollTable({ employees, companyId, onAddEmployee, onEmployeeRe
                       )}
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap">
-                      {hasSplits ? <span className="text-faint">—</span> : (() => {
-                        const ens = ensNames.get(emp.settleAddress.toLowerCase());
-                        return ens ? (
-                          <div>
-                            <div className="font-mono text-xs text-ink">{ens}</div>
-                            <div className="font-mono text-[10px] text-faint">
-                              {emp.settleAddress.slice(0, 6)}…{emp.settleAddress.slice(-4)}
-                            </div>
-                          </div>
-                        ) : (
-                          <code className="font-mono text-xs text-muted">
-                            {emp.settleAddress.slice(0, 8)}…{emp.settleAddress.slice(-6)}
-                          </code>
-                        );
-                      })()}
+                      {hasSplits ? <span className="text-faint">—</span> : (
+                        <code className="font-mono text-xs text-muted">
+                          {emp.settleAddress.slice(0, 8)}…{emp.settleAddress.slice(-6)}
+                        </code>
+                      )}
                     </td>
                     <td className="py-3 px-4">
                       <span className="text-faint">—</span>
