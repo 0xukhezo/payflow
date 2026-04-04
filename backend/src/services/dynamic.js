@@ -1,6 +1,9 @@
 /**
  * Dynamic / relayer wallet service
  * Handles relayer signing and treasury pulls for any ERC-20 asset.
+ *
+ * Uses singleton NonceManager signers per chain so concurrent calls
+ * never race to fetch the same nonce from the network.
  */
 import { ethers } from "ethers";
 
@@ -15,6 +18,21 @@ const ERC20_ABI = [
   "function decimals() view returns (uint8)",
 ];
 
+// Singleton NonceManager per chainId — prevents concurrent tx nonce collisions
+const _signers = new Map();
+
+function getRelayerSigner(chainId) {
+  if (_signers.has(chainId)) return _signers.get(chainId);
+  const relayerKey = process.env.RELAYER_PRIVATE_KEY;
+  if (!relayerKey) throw new Error("RELAYER_PRIVATE_KEY not set");
+  const net     = getNetwork(chainId);
+  const provider = new ethers.JsonRpcProvider(net.rpcUrl);
+  const wallet  = new ethers.Wallet(relayerKey, provider);
+  const signer  = new ethers.NonceManager(wallet);
+  _signers.set(chainId, signer);
+  return signer;
+}
+
 /**
  * Pull any ERC-20 asset from a company wallet into the relayer using transferFrom.
  * @param {string} asset  - token symbol (e.g. "usdc", "eth", "usdt")
@@ -23,26 +41,22 @@ const ERC20_ABI = [
  * @param {number} chainId
  */
 export async function pullFromTreasury(asset, companyAddress, amount, chainId = 11155111) {
-  const relayerKey = process.env.RELAYER_PRIVATE_KEY;
-  if (!relayerKey) throw new Error("RELAYER_PRIVATE_KEY not set");
-
-  const net           = getNetwork(chainId);
-  const token         = getToken(asset, chainId);
-  const chainProvider = new ethers.JsonRpcProvider(net.rpcUrl);
-  const relayerWallet = new ethers.Wallet(relayerKey, chainProvider);
-  const contract      = new ethers.Contract(token.address, ERC20_ABI, relayerWallet);
+  const signer   = getRelayerSigner(chainId);
+  const net      = getNetwork(chainId);
+  const token    = getToken(asset, chainId);
+  const contract = new ethers.Contract(token.address, ERC20_ABI, signer);
 
   const rawAmount = BigInt(Math.ceil(amount * 10 ** token.decimals));
 
-  const allowance = await contract.allowance(companyAddress, relayerWallet.address);
+  const allowance = await contract.allowance(companyAddress, await signer.getAddress());
   if (allowance < rawAmount) {
     throw new Error(
-      `Insufficient ${token.symbol} allowance. Company wallet ${companyAddress} must approve at least ${amount} ${token.symbol} to relayer ${relayerWallet.address} on ${net.name}.`
+      `Insufficient ${token.symbol} allowance. Company wallet ${companyAddress} must approve at least ${amount} ${token.symbol} to relayer ${await signer.getAddress()} on ${net.name}.`
     );
   }
 
   console.log(`[Treasury] Pulling ${amount} ${token.symbol} from ${companyAddress} on ${net.name}...`);
-  const tx      = await contract.transferFrom(companyAddress, relayerWallet.address, rawAmount);
+  const tx      = await contract.transferFrom(companyAddress, await signer.getAddress(), rawAmount);
   const receipt = await tx.wait();
   console.log(`[Treasury] Pull confirmed: ${receipt.hash}`);
   return receipt.hash;
@@ -53,14 +67,10 @@ export async function pullFromTreasury(asset, companyAddress, amount, chainId = 
  * Used to fund SideShift deposit addresses after treasury pull.
  */
 export async function sendFromRelayer(asset, toAddress, amount, chainId) {
-  const relayerKey = process.env.RELAYER_PRIVATE_KEY;
-  if (!relayerKey) throw new Error("RELAYER_PRIVATE_KEY not set");
-
-  const net           = getNetwork(chainId);
-  const token         = getToken(asset, chainId);
-  const chainProvider = new ethers.JsonRpcProvider(net.rpcUrl);
-  const relayerWallet = new ethers.Wallet(relayerKey, chainProvider);
-  const contract      = new ethers.Contract(token.address, ERC20_ABI, relayerWallet);
+  const signer   = getRelayerSigner(chainId);
+  const net      = getNetwork(chainId);
+  const token    = getToken(asset, chainId);
+  const contract = new ethers.Contract(token.address, ERC20_ABI, signer);
 
   const rawAmount = BigInt(Math.ceil(amount * 10 ** token.decimals));
   console.log(`[Relayer] Sending ${amount} ${token.symbol} to ${toAddress} on ${net.name}...`);
@@ -73,13 +83,10 @@ export async function sendFromRelayer(asset, toAddress, amount, chainId) {
 /**
  * Return the relayer's address (so frontend knows where to approve).
  */
-let _relayerAddress = null;
 export function getRelayerAddress() {
-  if (_relayerAddress) return _relayerAddress;
   const relayerKey = process.env.RELAYER_PRIVATE_KEY;
   if (!relayerKey) throw new Error("RELAYER_PRIVATE_KEY not set");
-  _relayerAddress = new ethers.Wallet(relayerKey).address;
-  return _relayerAddress;
+  return new ethers.Wallet(relayerKey).address;
 }
 
 /**

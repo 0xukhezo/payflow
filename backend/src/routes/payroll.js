@@ -288,9 +288,48 @@ router.post("/:companyId/run-stream", async (req, res) => {
       return res.end();
     }
 
-    // Simulation mode dispatched via Step 6 → results already in creResult.
+    // Simulation mode: CRE Step 6 dispatched the payroll to a background job.
+    // Poll companyRunStatus to forward execution steps and wait for completion.
     if (creResult?.dispatched === true) {
-      emit({ type: "done", companyId: data.id, results: (creResult.results ?? []).map(formatResult), creDispatched: true });
+      await new Promise((resolve) => {
+        const seen       = new Set();
+        let   attempts   = 0;
+        const POLL_MS    = 300;
+        const MAX_POLLS  = Math.ceil(180_000 / POLL_MS); // 3-minute ceiling
+
+        const pollId = setInterval(() => {
+          attempts++;
+          const s = companyRunStatus.get(data.id);
+
+          // No status entry yet (company not in Supabase — simulation-only)
+          if (!s) {
+            if (attempts * POLL_MS >= 3000) {
+              clearInterval(pollId);
+              emit({ type: "done", companyId: data.id, results: (creResult.results ?? []).map(formatResult), creDispatched: true });
+              resolve();
+            }
+            return;
+          }
+
+          // Forward any new execution steps
+          for (const step of s.steps ?? []) {
+            const key = `${step.id}:${step.status}`;
+            if (!seen.has(key)) { seen.add(key); emit({ type: "step", ...step }); }
+          }
+
+          if (s.status === "done" || s.status === "error" || attempts >= MAX_POLLS) {
+            clearInterval(pollId);
+            if (s.status === "done") {
+              emit({ type: "done", companyId: data.id, results: s.results ?? [] });
+            } else if (s.status === "error") {
+              emit({ type: "error", message: s.error ?? "Payroll execution failed" });
+            } else {
+              emit({ type: "error", message: "Payroll execution timed out" });
+            }
+            resolve();
+          }
+        }, POLL_MS);
+      });
       return res.end();
     }
 
@@ -383,6 +422,8 @@ function formatResult(r) {
     settleChainId:      r.settleChainId  || null,
     isTwoHop:           r.isTwoHop       || false,
     provider:           r.provider || "uniswap",
+    transferTxHash:     r.transferTxHash  || null,
+    explorerUrl:        r.explorerUrl     || null,
     deviationBps:       r.attestation?.deviationBps,
     deviationPercent:   r.attestation?.deviationPercent,
     withinRange:        r.attestation?.withinRange,

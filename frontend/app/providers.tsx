@@ -31,6 +31,7 @@ createAppKit({
     email: false,
     socials: [],
   },
+  allowUnsupportedChain: true,
 });
 
 export function Providers({ children }: { children: React.ReactNode }) {

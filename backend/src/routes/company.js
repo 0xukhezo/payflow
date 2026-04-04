@@ -170,6 +170,62 @@ router.get("/by-wallet/:address", async (req, res) => {
   }
 });
 
+// GET /api/company/by-treasury/:address/cre-payload
+// Called by the CRE log-trigger workflow after picking up a PayrollRequested event.
+// Returns the full trigger payload (companyId, treasury, depositChainId, employees[])
+// so the DON does not need to store sensitive HR data on-chain.
+router.get("/by-treasury/:address/cre-payload", async (req, res) => {
+  try {
+    const addr = req.params.address.toLowerCase();
+    const { data: company, error } = await supabase
+      .from("companies")
+      .select("id, wallet_address, chain_id, payment_asset, employees(id, name, salary_amount, preferred_asset, preferred_chain_id, settle_address, solana_address, world_id_verified)")
+      .ilike("wallet_address", addr)
+      .single();
+
+    if (error || !company) return res.status(404).json({ error: "Company not found" });
+
+    const empIds = company.employees.map((e) => e.id);
+    let splitsByEmp = {};
+    if (empIds.length > 0) {
+      const { data: splits } = await supabase
+        .from("payroll_splits")
+        .select("employee_id, percent, asset, chain_id, settle_address")
+        .in("employee_id", empIds);
+      for (const s of splits ?? []) {
+        (splitsByEmp[s.employee_id] ??= []).push({
+          percent:       s.percent,
+          asset:         s.asset,
+          chain_id:      s.chain_id,
+          settleAddress: s.settle_address,
+        });
+      }
+    }
+
+    const depositChainId = company.chain_id ?? 11155111;
+    const employees = company.employees.map((emp) => ({
+      id:               emp.id,
+      name:             emp.name,
+      salaryUsdc:       emp.salary_amount,
+      settleAddress:    emp.settle_address,
+      solanaAddress:    emp.solana_address ?? null,
+      preferredAsset:   emp.preferred_asset,
+      preferredChainId: emp.preferred_chain_id ?? depositChainId,
+      worldIdVerified:  emp.world_id_verified ?? false,
+      ...(splitsByEmp[emp.id]?.length > 0 && { splits: splitsByEmp[emp.id] }),
+    }));
+
+    res.json({
+      companyId:      company.id,
+      treasury:       company.wallet_address,
+      depositChainId,
+      employees,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/company/:id/employee
 router.post("/:id/employee", async (req, res) => {
   try {

@@ -28,6 +28,7 @@ import {
   HTTPClient,
   bytesToBigint,
 } from "@chainlink/cre-sdk";
+import type { EVMLog } from "@chainlink/cre-sdk";
 import type { Config, Employee, PayrollSplit, TriggerPayload } from "./types/types";
 
 // ABI selector for Chainlink AggregatorV3 latestRoundData()
@@ -476,11 +477,88 @@ const onHttpTrigger = (
   });
 };
 
+// ── Log trigger handler ───────────────────────────────────────────────────────
+//
+// Fires when a company calls PayrollTrigger.requestPayroll(treasury, depositChainId)
+// on Sepolia. The event is:
+//   PayrollRequested(address indexed treasury, uint256 indexed depositChainId, address indexed requestedBy)
+//   topic0 = keccak256("PayrollRequested(address,uint256,address)")
+//   topic1 = treasury   (20 bytes right-justified in 32 bytes)
+//   topic2 = depositChainId (uint256, 32 bytes big-endian)
+//
+// The handler fetches the full company payload from the backend using the
+// treasury address — keeping all HR data (names, salaries, splits) off-chain.
+
+// keccak256("PayrollRequested(address,uint256,address)")
+const PAYROLL_REQUESTED_SIG = "0xdddc44ebd25e9809781bd368117a87083c8cc338999ef43c41471a9c6d47bfd7";
+
+// Encode a JS string to Uint8Array without TextEncoder (not always available in CRE runtime)
+function stringToBytes(s: string): Uint8Array {
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i) & 0xff;
+  return out;
+}
+
+const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
+  // ── Decode event topics ─────────────────────────────────────────────────────
+  // topics[0] = event signature (filtered by logTrigger config)
+  // topics[1] = treasury address (last 20 bytes of 32-byte topic)
+  // topics[2] = depositChainId  (uint256, 32 bytes big-endian)
+  const treasury       = "0x" + Array.from(log.topics[1].slice(12)).map((b: number) => b.toString(16).padStart(2, "0")).join("");
+  const depositChainId = Number(bytesToBigint(log.topics[2]));
+  const txHashHex      = "0x" + Array.from(log.txHash).map((b: number) => b.toString(16).padStart(2, "0")).join("");
+
+  runtime.log("╔══════════════════════════════════════════════════════════════════╗");
+  runtime.log("║    PayFlow · CRE Payroll Workflow  [ON-CHAIN LOG TRIGGER]       ║");
+  runtime.log("╚══════════════════════════════════════════════════════════════════╝");
+  runtime.log(`[PayFlow] Trigger tx:     ${txHashHex}`);
+  runtime.log(`[PayFlow] Treasury:       ${treasury}`);
+  runtime.log(`[PayFlow] Deposit chain:  ${depositChainId}`);
+
+  // ── Fetch company + employee data from backend ──────────────────────────────
+  // HR data (names, salaries, splits) stays off-chain — only treasury addr is on-chain.
+  const http       = new cre.capabilities.HTTPClient();
+  const payloadUrl = `${runtime.config.backendApiUrl}/api/company/by-treasury/${treasury}/cre-payload`;
+  runtime.log(`[PayFlow] Fetching payload: ${payloadUrl}`);
+
+  const payloadResp = http.sendRequest(
+    runtime as unknown as NodeRuntime<unknown>,
+    { url: payloadUrl, method: "GET", headers: { "Content-Type": "application/json" }, body: base64Encode("") },
+  ).result();
+
+  if (payloadResp.statusCode !== 200) {
+    throw new Error(`Failed to fetch company payload: HTTP ${payloadResp.statusCode}`);
+  }
+
+  const body = JSON.parse(bytesToString(payloadResp.body)) as TriggerPayload;
+  runtime.log(`[PayFlow] Company:        ${body.companyId}`);
+  runtime.log(`[PayFlow] Roster:         ${body.employees.length} employee(s)`);
+
+  // ── Delegate to the HTTP trigger handler (same verification + dispatch logic) ─
+  const fakePayload = { input: stringToBytes(JSON.stringify(body)) } as unknown as HTTPPayload;
+  return onHttpTrigger(runtime, fakePayload);
+};
+
 // ── Workflow registration ─────────────────────────────────────────────────────
 
-const initWorkflow = (_config: Config) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const initWorkflow = (config: Config): any[] => {
   const http = new cre.capabilities.HTTPCapability();
-  return [cre.handler(http.trigger({}), onHttpTrigger)];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const handlers: any[] = [cre.handler(http.trigger({}), onHttpTrigger)];
+
+  // When triggerContractAddress is set, the DON also listens for
+  // PayrollRequested events on-chain and triggers the workflow automatically.
+  if (config.triggerContractAddress && config.triggerContractAddress.length > 2) {
+    const evmClient  = new cre.capabilities.EVMClient(EVMClient.SUPPORTED_CHAIN_SELECTORS["ethereum-testnet-sepolia"]);
+    const logTrigger = evmClient.logTrigger({
+      addresses: [config.triggerContractAddress],
+      topics:    [{ values: [PAYROLL_REQUESTED_SIG] }],
+    });
+    handlers.push(cre.handler(logTrigger, onLogTrigger));
+  }
+
+  return handlers;
 };
 
 export async function main() {

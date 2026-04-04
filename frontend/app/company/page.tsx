@@ -117,12 +117,18 @@ export default function CompanyPage() {
       employeeName: string;
       skipped: boolean;
       reason?: string;
-      settleAmount?: number;
-      settleAsset?: string;
       shiftId?: string;
-      isTwoHop?: boolean;
+      depositAsset?: string;
+      depositAmount?: number;
       depositChainId?: number;
+      settleAmount?: number | string;
+      settleAsset?: string;
       settleChainId?: number;
+      isTwoHop?: boolean;
+      provider?: string;
+      transferTxHash?: string;
+      explorerUrl?: string;
+      status?: string;
     }[];
   } | null>(null);
   const [showPayrollModal, setShowPayrollModal] = useState(false);
@@ -1270,12 +1276,66 @@ export default function CompanyPage() {
                 </>
               )}
               {payrollResult && !payrollRunning ? (
-                <button
-                  onClick={() => setShowPayrollModal(false)}
-                  className="w-full py-2.5 border border-rim text-muted font-mono text-xs tracking-widest hover:border-muted transition-colors"
-                >
-                  CLOSE
-                </button>
+                <>
+                  {/* Result cards */}
+                  <div className="space-y-2 max-h-64 overflow-y-auto mb-1">
+                    {payrollResult.results.map((r, i) => {
+                      const settleNet = r.settleChainId ? getNetworkByChainId(r.settleChainId) : undefined;
+                      const depositNet = r.depositChainId ? getNetworkByChainId(r.depositChainId) : undefined;
+                      // Determine best tx link
+                      const txHash = r.shiftId?.startsWith("0x") && r.shiftId.length === 66 ? r.shiftId : r.transferTxHash;
+                      const txNet  = txHash ? (r.settleChainId ? settleNet : depositNet) : undefined;
+                      const txHref = r.explorerUrl ?? (txHash && txNet ? `${txNet.explorer}/tx/${txHash}` : undefined);
+                      const providerLabel = r.provider === "sideshift" ? "SideShift" : r.isTwoHop ? "Bridge" : "Uniswap";
+                      return (
+                        <div key={`${r.employeeId}-${i}`} className={`px-3 py-2.5 border ${r.skipped ? "border-line bg-overlay/40" : "border-teal/20 bg-teal/5"}`}>
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="font-mono text-xs text-ink font-medium truncate">{r.employeeName}</span>
+                            <span className={`font-mono text-[9px] tracking-wider px-1.5 py-0.5 border shrink-0 ${r.skipped ? "border-line text-muted" : r.status === "failed" ? "border-red/30 text-red" : "border-teal/40 text-teal"}`}>
+                              {r.skipped ? "SKIPPED" : r.status === "failed" ? "FAILED" : r.status === "processing" ? "PROCESSING" : "SETTLED"}
+                            </span>
+                          </div>
+                          {r.skipped ? (
+                            <p className="font-mono text-[10px] text-muted">{r.reason ?? "Skipped"}</p>
+                          ) : (
+                            <>
+                              <div className="font-mono text-[10px] text-muted flex items-center gap-1.5 flex-wrap">
+                                <span className="text-ink">{Number(r.settleAmount).toFixed(6)} {r.settleAsset}</span>
+                                {settleNet && <><span>·</span><span>{settleNet.shortName}</span></>}
+                                <span>·</span>
+                                <span className="text-gold/80">{providerLabel}</span>
+                              </div>
+                              {txHref && (
+                                <a href={txHref} target="_blank" rel="noopener noreferrer"
+                                  className="flex items-center gap-1 mt-1 hover:opacity-80 transition-opacity">
+                                  <span className="font-mono text-[10px] text-muted truncate">
+                                    {txHash ? `${txHash.slice(0, 18)}…` : "View transaction"}
+                                  </span>
+                                  <ExternalLink className="w-2.5 h-2.5 text-muted shrink-0" />
+                                </a>
+                              )}
+                              {r.isTwoHop && r.transferTxHash && r.settleChainId && (
+                                <a href={`${settleNet?.explorer}/tx/${r.transferTxHash}`} target="_blank" rel="noopener noreferrer"
+                                  className="flex items-center gap-1 mt-0.5 hover:opacity-80 transition-opacity">
+                                  <span className="font-mono text-[10px] text-muted truncate">
+                                    Delivery: {r.transferTxHash.slice(0, 18)}…
+                                  </span>
+                                  <ExternalLink className="w-2.5 h-2.5 text-muted shrink-0" />
+                                </a>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={() => setShowPayrollModal(false)}
+                    className="w-full py-2.5 border border-rim text-muted font-mono text-xs tracking-widest hover:border-muted transition-colors"
+                  >
+                    CLOSE
+                  </button>
+                </>
               ) : null}
             </div>
           </div>

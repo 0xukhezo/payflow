@@ -3,7 +3,7 @@
   "networkLabel": "Ethereum Mainnet",
   "dispatcherAddress": "",
   "backendApiUrl": "https://api.payflow.finance",
-  "uniswapApiKey": "rg2AZY_IV-xqBiqCCYRWM5KL4vmNqGU6SjE4lSm5xTs",
+  "uniswapApiKey": "sxQAegI1gNFNJ3S5hYxNIwawpByhVkl4V41r2HxCZ80",
   "oracleRpc": "https://ethereum-rpc.publicnode.com",
   "feedEthUsd": "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419",
   "feedBtcUsd": "0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c"

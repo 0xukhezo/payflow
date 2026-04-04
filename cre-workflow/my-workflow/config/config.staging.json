@@ -1,9 +1,10 @@
 {
   "toleranceBps": 8000,
   "networkLabel": "Sepolia Testnet",
-  "dispatcherAddress": "",
+  "dispatcherAddress": "0x6E035D26fe45Da426b33c9bFEdfc932F534d2483",
+  "triggerContractAddress": "",
   "backendApiUrl": "http://localhost:3001",
-  "uniswapApiKey": "rg2AZY_IV-xqBiqCCYRWM5KL4vmNqGU6SjE4lSm5xTs",
+  "uniswapApiKey": "sxQAegI1gNFNJ3S5hYxNIwawpByhVkl4V41r2HxCZ80",
   "oracleRpc": "https://ethereum-sepolia-rpc.publicnode.com",
   "feedEthUsd": "0x694AA1769357215DE4FAC081bf1f309aDC325306",
   "feedBtcUsd": "0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43"

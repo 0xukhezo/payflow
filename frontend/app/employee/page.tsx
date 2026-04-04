@@ -52,18 +52,24 @@ const ENS_RESOLVER_ABI = [
 const MAINNET_RPC = "https://ethereum-rpc.publicnode.com";
 
 export default function EmployeePage() {
-  const { address: evmAddress, isConnected: evmConnected } = useAppKitAccount({ namespace: "eip155" });
-  const { address: solanaWalletAddress, isConnected: solanaConnected } = useAppKitAccount({ namespace: "solana" });
+  const { address: evmAddress, isConnected: evmConnected } = useAppKitAccount({
+    namespace: "eip155",
+  });
+  const { address: solanaWalletAddress, isConnected: solanaConnected } =
+    useAppKitAccount({ namespace: "solana" });
   const { walletProvider } = useAppKitProvider<Eip1193Provider>("eip155");
 
   // Prefer EVM address for primary identity; fall back to Solana-only
   const activeAddress = evmAddress || solanaWalletAddress;
   const isConnected = evmConnected || solanaConnected;
-  const primaryWallet = isConnected && activeAddress ? { address: activeAddress } : null;
+  const primaryWallet =
+    isConnected && activeAddress ? { address: activeAddress } : null;
 
   const toast = useToast();
   const { mode, supportedNetworks, defaultNetwork } = useNetworkMode();
-  const [record, setRecord] = useState<EmployeeRecord | null | "not-found">(null);
+  const [record, setRecord] = useState<EmployeeRecord | null | "not-found">(
+    null,
+  );
   const [isCompanyOwner, setIsCompanyOwner] = useState(false);
   const [isWorldIdVerified, setIsWorldIdVerified] = useState(false);
   const [rpContext, setRpContext] = useState<RpContext | null>(null);
@@ -99,20 +105,34 @@ export default function EmployeePage() {
   const [joinName, setJoinName] = useState("");
   const [joinEnsName, setJoinEnsName] = useState("");
   const [joinEnsResolving, setJoinEnsResolving] = useState(false);
-  const [joinEnsResolved, setJoinEnsResolved] = useState<{ address: string; splits: { percent: number; asset: string; chain_id: number }[] | null; solanaAddress?: string | null } | null>(null);
+  const [joinEnsResolved, setJoinEnsResolved] = useState<{
+    address: string;
+    splits: { percent: number; asset: string; chain_id: number }[] | null;
+    solanaAddress?: string | null;
+  } | null>(null);
   const [joinSolanaAddress, setJoinSolanaAddress] = useState("");
   const [joinEnsError, setJoinEnsError] = useState<string | null>(null);
   const joinEnsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [joinCompanyQuery, setJoinCompanyQuery] = useState("");
-  const [joinCompanyResults, setJoinCompanyResults] = useState<{ id: string; name: string; chain_id: number }[]>([]);
-  const [joinCompanySelected, setJoinCompanySelected] = useState<{ id: string; name: string } | null>(null);
+  const [joinCompanyResults, setJoinCompanyResults] = useState<
+    { id: string; name: string; chain_id: number }[]
+  >([]);
+  const [joinCompanySelected, setJoinCompanySelected] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   const [joinSearching, setJoinSearching] = useState(false);
   const [joinSubmitting, setJoinSubmitting] = useState(false);
   const [joinSent, setJoinSent] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
   const [pendingRequest, setPendingRequest] = useState<{
-    id: string; companyId: string; companyName: string; employeeName: string;
-    ensName: string | null; solanaAddress: string | null; createdAt: string;
+    id: string;
+    companyId: string;
+    companyName: string;
+    employeeName: string;
+    ensName: string | null;
+    solanaAddress: string | null;
+    createdAt: string;
   } | null>(null);
   const [cancellingRequest, setCancellingRequest] = useState(false);
 
@@ -148,12 +168,23 @@ export default function EmployeePage() {
           // Load payout splits
           fetch(`${API_URL}/api/employee/${data.employeeId}/splits`)
             .then((r) => r.json())
-            .then((d) => setSplits((d.splits || []).map((s: { percent: number; asset: string; chain_id: number; settle_address?: string }) => ({
-              percent:      s.percent,
-              asset:        s.asset,
-              chain_id:     s.chain_id,
-              settleAddress: s.settle_address || undefined,
-            }))))
+            .then((d) =>
+              setSplits(
+                (d.splits || []).map(
+                  (s: {
+                    percent: number;
+                    asset: string;
+                    chain_id: number;
+                    settle_address?: string;
+                  }) => ({
+                    percent: s.percent,
+                    asset: s.asset,
+                    chain_id: s.chain_id,
+                    settleAddress: s.settle_address || undefined,
+                  }),
+                ),
+              ),
+            )
             .catch(() => {});
           // Sync World ID status from DB
           if (data.worldIdVerified) {
@@ -170,7 +201,10 @@ export default function EmployeePage() {
             .then((r) => r.json())
             .then((d) => {
               if (d.verified) {
-                localStorage.setItem(`payflow_worldid_verified_${addrKey}`, "1");
+                localStorage.setItem(
+                  `payflow_worldid_verified_${addrKey}`,
+                  "1",
+                );
                 setIsWorldIdVerified(true);
               } else {
                 localStorage.removeItem(`payflow_worldid_verified_${addrKey}`);
@@ -355,22 +389,31 @@ export default function EmployeePage() {
     setEnsPublished(false);
     try {
       // 1. Verify ENS name resolves to this wallet
-      const r = await fetch(`${API_URL}/api/ens/${encodeURIComponent(ensName)}?network=${mode === "mainnet" ? "mainnet" : "sepolia"}`);
+      const r = await fetch(
+        `${API_URL}/api/ens/${encodeURIComponent(ensName)}?network=${mode === "mainnet" ? "mainnet" : "sepolia"}`,
+      );
       const data = await r.json();
       if (!r.ok) {
         setEnsNameError(data.error || "ENS name not found");
         return;
       }
       if (data.address.toLowerCase() !== evmAddress.toLowerCase()) {
-        setEnsNameError("This ENS name resolves to a different address than your connected wallet");
+        setEnsNameError(
+          "This ENS name resolves to a different address than your connected wallet",
+        );
         return;
       }
 
       // 2. Get the resolver address for this name via public mainnet RPC
-      const mainnetProvider = new ethers.JsonRpcProvider(MAINNET_RPC, "mainnet");
+      const mainnetProvider = new ethers.JsonRpcProvider(
+        MAINNET_RPC,
+        "mainnet",
+      );
       const resolver = await mainnetProvider.getResolver(ensName);
       if (!resolver) {
-        setEnsNameError("No resolver set for this ENS name — set one via the ENS app first");
+        setEnsNameError(
+          "No resolver set for this ENS name — set one via the ENS app first",
+        );
         return;
       }
 
@@ -388,16 +431,28 @@ export default function EmployeePage() {
       const signer = await activeProvider.getSigner();
 
       // 4. Call setText on the resolver
-      const resolverContract = new ethers.Contract(resolver.address, ENS_RESOLVER_ABI, signer);
+      const resolverContract = new ethers.Contract(
+        resolver.address,
+        ENS_RESOLVER_ABI,
+        signer,
+      );
       const node = ethers.namehash(ensName);
 
-      const tx1 = await resolverContract.setText(node, "com.payflow.splits", JSON.stringify(splits));
+      const tx1 = await resolverContract.setText(
+        node,
+        "com.payflow.splits",
+        JSON.stringify(splits),
+      );
       await tx1.wait(1);
 
       // 5. Publish solana address if there's a SOL split
       const hasSol = splits.some((s) => s.asset === "sol");
       if (hasSol && solanaAddress.trim()) {
-        const tx2 = await resolverContract.setText(node, "com.payflow.solanaAddress", solanaAddress.trim());
+        const tx2 = await resolverContract.setText(
+          node,
+          "com.payflow.solanaAddress",
+          solanaAddress.trim(),
+        );
         await tx2.wait(1);
       }
 
@@ -430,7 +485,15 @@ export default function EmployeePage() {
       if (!payments?.length) throw new Error("No payment history to sync");
 
       // 2. Format as compact array (last 20, completed only)
-      const completed = (payments as { date: string; amount: string; asset: string; transferTxHash?: string; status: string }[])
+      const completed = (
+        payments as {
+          date: string;
+          amount: string;
+          asset: string;
+          transferTxHash?: string;
+          status: string;
+        }[]
+      )
         .filter((p) => p.status === "completed" || p.status === "sent")
         .slice(0, 20)
         .map((p) => ({
@@ -442,7 +505,10 @@ export default function EmployeePage() {
       if (!completed.length) throw new Error("No completed payments to sync");
 
       // 3. Get resolver
-      const mainnetProvider = new ethers.JsonRpcProvider(MAINNET_RPC, "mainnet");
+      const mainnetProvider = new ethers.JsonRpcProvider(
+        MAINNET_RPC,
+        "mainnet",
+      );
       const resolver = await mainnetProvider.getResolver(ensName);
       if (!resolver) throw new Error("No resolver set for this ENS name");
 
@@ -450,20 +516,34 @@ export default function EmployeePage() {
       const browserProvider = new ethers.BrowserProvider(walletProvider);
       const network = await browserProvider.getNetwork();
       if (Number(network.chainId) !== 1) {
-        await walletProvider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: "0x1" }] });
+        await walletProvider.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: "0x1" }],
+        });
       }
       // Re-create provider after potential chain switch
       const activeProvider = new ethers.BrowserProvider(walletProvider);
       const signer = await activeProvider.getSigner();
-      const resolverContract = new ethers.Contract(resolver.address, ENS_RESOLVER_ABI, signer);
+      const resolverContract = new ethers.Contract(
+        resolver.address,
+        ENS_RESOLVER_ABI,
+        signer,
+      );
       const node = ethers.namehash(ensName);
 
       // 5. Write com.payflow.payments
-      const tx = await resolverContract.setText(node, "com.payflow.payments", JSON.stringify(completed));
+      const tx = await resolverContract.setText(
+        node,
+        "com.payflow.payments",
+        JSON.stringify(completed),
+      );
       await tx.wait(1);
 
       setEnsSyncedPayments(true);
-      toast("success", `${completed.length} payment${completed.length > 1 ? "s" : ""} synced to ENS.`);
+      toast(
+        "success",
+        `${completed.length} payment${completed.length > 1 ? "s" : ""} synced to ENS.`,
+      );
     } catch (err: unknown) {
       setEnsNameError(friendlyError(err));
     } finally {
@@ -475,25 +555,37 @@ export default function EmployeePage() {
   // Always use mainnet for reverse lookup — primary names are registered there.
   useEffect(() => {
     if (record !== "not-found" || !evmAddress || joinEnsName) return;
-    const provider = new ethers.JsonRpcProvider("https://cloudflare-eth.com", "mainnet");
-    provider.lookupAddress(evmAddress).then((name) => {
-      if (!name) return;
-      // Set the field value then trigger the full ENS fetch (splits etc.)
-      setJoinEnsName(name);
-      setJoinEnsResolving(true);
-      setJoinEnsResolved(null);
-      setJoinEnsError(null);
-      fetch(`${API_URL}/api/ens/${encodeURIComponent(name)}?network=${mode === "mainnet" ? "mainnet" : "sepolia"}`)
-        .then((r) => r.json())
-        .then((data) => {
-          if (data.address) {
-          setJoinEnsResolved({ address: data.address, splits: data.splits, solanaAddress: data.solanaAddress });
-          if (data.solanaAddress) setJoinSolanaAddress(data.solanaAddress);
-        }
-        })
-        .catch(() => {})
-        .finally(() => setJoinEnsResolving(false));
-    }).catch(() => {});
+    const provider = new ethers.JsonRpcProvider(
+      "https://cloudflare-eth.com",
+      "mainnet",
+    );
+    provider
+      .lookupAddress(evmAddress)
+      .then((name) => {
+        if (!name) return;
+        // Set the field value then trigger the full ENS fetch (splits etc.)
+        setJoinEnsName(name);
+        setJoinEnsResolving(true);
+        setJoinEnsResolved(null);
+        setJoinEnsError(null);
+        fetch(
+          `${API_URL}/api/ens/${encodeURIComponent(name)}?network=${mode === "mainnet" ? "mainnet" : "sepolia"}`,
+        )
+          .then((r) => r.json())
+          .then((data) => {
+            if (data.address) {
+              setJoinEnsResolved({
+                address: data.address,
+                splits: data.splits,
+                solanaAddress: data.solanaAddress,
+              });
+              if (data.solanaAddress) setJoinSolanaAddress(data.solanaAddress);
+            }
+          })
+          .catch(() => {})
+          .finally(() => setJoinEnsResolving(false));
+      })
+      .catch(() => {});
   }, [record, evmAddress]);
 
   // Company search debounce
@@ -507,7 +599,9 @@ export default function EmployeePage() {
     setJoinSearching(true);
     joinSearchRef.current = setTimeout(async () => {
       try {
-        const r = await fetch(`${API_URL}/api/company/search?name=${encodeURIComponent(value.trim())}`);
+        const r = await fetch(
+          `${API_URL}/api/company/search?name=${encodeURIComponent(value.trim())}`,
+        );
         const data = await r.json();
         setJoinCompanyResults(data.companies || []);
       } catch {
@@ -527,14 +621,25 @@ export default function EmployeePage() {
     setJoinEnsResolving(true);
     joinEnsDebounceRef.current = setTimeout(async () => {
       try {
-        const r = await fetch(`${API_URL}/api/ens/${encodeURIComponent(value)}?network=${mode === "mainnet" ? "mainnet" : "sepolia"}`);
+        const r = await fetch(
+          `${API_URL}/api/ens/${encodeURIComponent(value)}?network=${mode === "mainnet" ? "mainnet" : "sepolia"}`,
+        );
         const data = await r.json();
-        if (!r.ok) { setJoinEnsError(data.error || "Name not found"); return; }
-        if (data.address?.toLowerCase() !== evmAddress?.toLowerCase()) {
-          setJoinEnsError("This ENS name resolves to a different address than your wallet");
+        if (!r.ok) {
+          setJoinEnsError(data.error || "Name not found");
           return;
         }
-        setJoinEnsResolved({ address: data.address, splits: data.splits, solanaAddress: data.solanaAddress });
+        if (data.address?.toLowerCase() !== evmAddress?.toLowerCase()) {
+          setJoinEnsError(
+            "This ENS name resolves to a different address than your wallet",
+          );
+          return;
+        }
+        setJoinEnsResolved({
+          address: data.address,
+          splits: data.splits,
+          solanaAddress: data.solanaAddress,
+        });
         if (data.solanaAddress) setJoinSolanaAddress(data.solanaAddress);
         setJoinEnsError(null);
       } catch {
@@ -546,25 +651,39 @@ export default function EmployeePage() {
   };
 
   const handleSubmitJoinRequest = async () => {
-    if (!joinName.trim()) { setJoinError("Enter your name"); return; }
-    if (!joinCompanySelected) { setJoinError("Select a company"); return; }
-    if (!evmAddress) { setJoinError("Connect your EVM wallet first"); return; }
+    if (!joinName.trim()) {
+      setJoinError("Enter your name");
+      return;
+    }
+    if (!joinCompanySelected) {
+      setJoinError("Select a company");
+      return;
+    }
+    if (!evmAddress) {
+      setJoinError("Connect your EVM wallet first");
+      return;
+    }
     setJoinSubmitting(true);
     setJoinError(null);
     try {
-      const r = await fetch(`${API_URL}/api/company/${joinCompanySelected.id}/join-requests`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          employeeName: joinName.trim(),
-          employeeAddress: evmAddress,
-          preferredAsset: "usdc",
-          preferredChainId: 11155111,
-          ensName: joinEnsResolved ? joinEnsName.trim() : undefined,
-          solanaAddress: joinSolanaAddress.trim() || undefined,
-          ensSplits: joinEnsResolved?.splits?.length ? joinEnsResolved.splits : undefined,
-        }),
-      });
+      const r = await fetch(
+        `${API_URL}/api/company/${joinCompanySelected.id}/join-requests`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            employeeName: joinName.trim(),
+            employeeAddress: evmAddress,
+            preferredAsset: "usdc",
+            preferredChainId: 11155111,
+            ensName: joinEnsResolved ? joinEnsName.trim() : undefined,
+            solanaAddress: joinSolanaAddress.trim() || undefined,
+            ensSplits: joinEnsResolved?.splits?.length
+              ? joinEnsResolved.splits
+              : undefined,
+          }),
+        },
+      );
       const data = await r.json();
       if (!r.ok) throw new Error(data.error || "Failed to send request");
       setJoinSent(true);
@@ -581,9 +700,12 @@ export default function EmployeePage() {
     if (!pendingRequest) return;
     setCancellingRequest(true);
     try {
-      await fetch(`${API_URL}/api/company/${pendingRequest.companyId}/join-requests/${pendingRequest.id}`, {
-        method: "DELETE",
-      });
+      await fetch(
+        `${API_URL}/api/company/${pendingRequest.companyId}/join-requests/${pendingRequest.id}`,
+        {
+          method: "DELETE",
+        },
+      );
       setPendingRequest(null);
       setJoinSent(false);
       toast("success", "Request cancelled.");
@@ -661,7 +783,6 @@ export default function EmployeePage() {
       <AppNav label="MY EARNINGS" />
 
       <div className="max-w-6xl mx-auto px-8 py-10 space-y-8">
-
         <WalletCard
           address={evmAddress ?? primaryWallet.address}
           balance={tokenBalance ?? "—"}
@@ -675,7 +796,12 @@ export default function EmployeePage() {
           label="EVM Wallet"
           solana={
             solanaWalletAddress
-              ? { address: solanaWalletAddress, balance: solanaBalance ?? "—", unit: "SOL", label: "Solana Wallet" }
+              ? {
+                  address: solanaWalletAddress,
+                  balance: solanaBalance ?? "—",
+                  unit: "SOL",
+                  label: "Solana Wallet",
+                }
               : undefined
           }
         />
@@ -719,7 +845,7 @@ export default function EmployeePage() {
                 Request to Join a Company
               </div>
             </div>
-            {(pendingRequest || joinSent) ? (
+            {pendingRequest || joinSent ? (
               <div className="px-6 py-6 space-y-4">
                 <div className="flex items-center gap-2 text-gold font-mono text-xs font-bold">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -727,20 +853,26 @@ export default function EmployeePage() {
                 </div>
                 <div className="px-3 py-2.5 bg-overlay border border-rim space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-[10px] text-muted">Company</span>
+                    <span className="font-mono text-[10px] text-muted">
+                      Company
+                    </span>
                     <span className="font-heading text-sm font-bold text-ink">
                       {pendingRequest?.companyName ?? joinCompanySelected?.name}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="font-mono text-[10px] text-muted">Name</span>
+                    <span className="font-mono text-[10px] text-muted">
+                      Name
+                    </span>
                     <span className="font-mono text-xs text-ink">
                       {pendingRequest?.employeeName ?? joinName}
                     </span>
                   </div>
                   {(pendingRequest?.ensName ?? joinEnsName) && (
                     <div className="flex items-center justify-between">
-                      <span className="font-mono text-[10px] text-muted">ENS</span>
+                      <span className="font-mono text-[10px] text-muted">
+                        ENS
+                      </span>
                       <span className="font-mono text-xs text-gold">
                         {pendingRequest?.ensName ?? joinEnsName}
                       </span>
@@ -748,7 +880,9 @@ export default function EmployeePage() {
                   )}
                   {(pendingRequest?.solanaAddress ?? joinSolanaAddress) && (
                     <div className="flex items-center justify-between gap-4">
-                      <span className="font-mono text-[10px] text-muted shrink-0">Solana</span>
+                      <span className="font-mono text-[10px] text-muted shrink-0">
+                        Solana
+                      </span>
                       <span className="font-mono text-[10px] text-ink truncate">
                         {pendingRequest?.solanaAddress ?? joinSolanaAddress}
                       </span>
@@ -756,21 +890,25 @@ export default function EmployeePage() {
                   )}
                 </div>
                 <p className="text-xs text-muted leading-relaxed">
-                  The company owner will review your request. You'll be added to payroll once they accept.
+                  The company owner will review your request. You'll be added to
+                  payroll once they accept.
                 </p>
                 <button
                   onClick={handleCancelRequest}
                   disabled={cancellingRequest}
                   className="flex items-center justify-center gap-2 w-full py-2.5 bg-red/10 border border-red/30 text-red font-mono text-xs font-bold tracking-widest hover:bg-red/20 transition-colors disabled:opacity-40"
                 >
-                  {cancellingRequest && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {cancellingRequest && (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  )}
                   CANCEL REQUEST
                 </button>
               </div>
             ) : (
               <div className="px-6 py-5 space-y-4">
                 <p className="text-xs text-muted leading-relaxed">
-                  Search for your company and send a join request. The owner will see it in their dashboard and can accept you directly.
+                  Search for your company and send a join request. The owner
+                  will see it in their dashboard and can accept you directly.
                 </p>
                 <div>
                   <div className="section-label mb-1">Your name</div>
@@ -783,7 +921,12 @@ export default function EmployeePage() {
                   />
                 </div>
                 <div>
-                  <div className="section-label mb-1">Your ENS name <span className="text-faint normal-case font-sans font-normal tracking-normal">(optional — auto-applies your payment splits)</span></div>
+                  <div className="section-label mb-1">
+                    Your ENS name{" "}
+                    <span className="text-faint normal-case font-sans font-normal tracking-normal">
+                      (optional — auto-applies your payment splits)
+                    </span>
+                  </div>
                   <div className="relative">
                     <input
                       type="text"
@@ -802,22 +945,33 @@ export default function EmployeePage() {
                         <CheckCircle className="w-3 h-3 shrink-0" />
                         ENS PROFILE FOUND
                       </div>
-                      {joinEnsResolved.splits && joinEnsResolved.splits.length > 0 ? (
+                      {joinEnsResolved.splits &&
+                      joinEnsResolved.splits.length > 0 ? (
                         joinEnsResolved.splits.map((s, i) => (
-                          <div key={i} className="text-muted">{s.percent}% → {s.asset.toUpperCase()} (chain {s.chain_id})</div>
+                          <div key={i} className="text-muted">
+                            {s.percent}% → {s.asset.toUpperCase()} (chain{" "}
+                            {s.chain_id})
+                          </div>
                         ))
                       ) : (
-                        <div className="text-muted">Address verified — no splits set yet</div>
+                        <div className="text-muted">
+                          Address verified — no splits set yet
+                        </div>
                       )}
                     </div>
                   )}
                   {joinEnsError && (
-                    <p className="mt-1 font-mono text-[10px] text-red">{joinEnsError}</p>
+                    <p className="mt-1 font-mono text-[10px] text-red">
+                      {joinEnsError}
+                    </p>
                   )}
                 </div>
                 <div>
                   <div className="section-label mb-1">
-                    Solana address <span className="text-faint normal-case font-sans font-normal tracking-normal">(optional — for SOL payouts)</span>
+                    Solana address{" "}
+                    <span className="text-faint normal-case font-sans font-normal tracking-normal">
+                      (optional — for SOL payouts)
+                    </span>
                   </div>
                   <input
                     type="text"
@@ -826,21 +980,29 @@ export default function EmployeePage() {
                     placeholder="7xKX… (auto-filled from ENS if set)"
                     className="w-full px-3 py-2 bg-overlay border border-rim text-ink font-ui text-sm placeholder:text-placeholder focus:outline-none focus:border-gold font-mono"
                   />
-                  {solanaWalletAddress && joinSolanaAddress !== solanaWalletAddress && (
-                    <button
-                      onClick={() => setJoinSolanaAddress(solanaWalletAddress)}
-                      className="mt-1 font-mono text-[10px] text-muted hover:text-gold transition-colors"
-                    >
-                      Use connected Solana wallet ({solanaWalletAddress.slice(0, 8)}…)
-                    </button>
-                  )}
+                  {solanaWalletAddress &&
+                    joinSolanaAddress !== solanaWalletAddress && (
+                      <button
+                        onClick={() =>
+                          setJoinSolanaAddress(solanaWalletAddress)
+                        }
+                        className="mt-1 font-mono text-[10px] text-muted hover:text-gold transition-colors"
+                      >
+                        Use connected Solana wallet (
+                        {solanaWalletAddress.slice(0, 8)}…)
+                      </button>
+                    )}
                 </div>
                 <div>
                   <div className="section-label mb-1">Company name</div>
                   <div className="relative">
                     <input
                       type="text"
-                      value={joinCompanySelected ? joinCompanySelected.name : joinCompanyQuery}
+                      value={
+                        joinCompanySelected
+                          ? joinCompanySelected.name
+                          : joinCompanyQuery
+                      }
                       onChange={(e) => handleJoinCompanyQuery(e.target.value)}
                       placeholder="Search company…"
                       className="w-full px-3 py-2 bg-overlay border border-rim text-ink font-ui text-sm placeholder:text-placeholder focus:outline-none focus:border-gold"
@@ -867,8 +1029,19 @@ export default function EmployeePage() {
                   )}
                   {joinCompanySelected && (
                     <div className="mt-1 flex items-center justify-between font-mono text-[10px] text-teal">
-                      <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3" />{joinCompanySelected.name}</span>
-                      <button onClick={() => { setJoinCompanySelected(null); setJoinCompanyQuery(""); }} className="text-muted hover:text-red transition-colors">change</button>
+                      <span className="flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" />
+                        {joinCompanySelected.name}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setJoinCompanySelected(null);
+                          setJoinCompanyQuery("");
+                        }}
+                        className="text-muted hover:text-red transition-colors"
+                      >
+                        change
+                      </button>
                     </div>
                   )}
                 </div>
@@ -877,10 +1050,14 @@ export default function EmployeePage() {
                 )}
                 <button
                   onClick={handleSubmitJoinRequest}
-                  disabled={joinSubmitting || !joinName.trim() || !joinCompanySelected}
+                  disabled={
+                    joinSubmitting || !joinName.trim() || !joinCompanySelected
+                  }
                   className="w-full py-2.5 flex items-center justify-center gap-2 bg-gold text-paper font-mono text-xs font-bold tracking-widest transition-all hover:brightness-110 disabled:opacity-40"
                 >
-                  {joinSubmitting && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {joinSubmitting && (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  )}
                   SEND JOIN REQUEST →
                 </button>
               </div>
@@ -987,116 +1164,120 @@ export default function EmployeePage() {
 
                 {draftSplits.map((s, i) => (
                   <div key={i} className="space-y-1.5">
-                  <div
-                    className="grid grid-cols-[56px_1fr_1fr_32px] gap-2 items-end"
-                  >
-                    <div>
-                      <div className="section-label mb-1">%</div>
+                    <div className="grid grid-cols-[56px_1fr_1fr_32px] gap-2 items-end">
+                      <div>
+                        <div className="section-label mb-1">%</div>
+                        <input
+                          type="number"
+                          min={1}
+                          max={100}
+                          value={s.percent}
+                          onChange={(e) => {
+                            const next = [...draftSplits];
+                            next[i] = {
+                              ...next[i],
+                              percent: Number(e.target.value),
+                            };
+                            setDraftSplits(next);
+                          }}
+                          className="w-full px-2 py-2 bg-overlay border border-rim font-mono text-xs text-ink focus:outline-none focus:border-gold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+                      </div>
+                      <AssetSelector
+                        value={s.asset}
+                        onChange={(v) => {
+                          const next = [...draftSplits];
+                          next[i] = {
+                            ...next[i],
+                            asset: v,
+                            chain_id:
+                              v === "sol"
+                                ? SOLANA_CHAIN_ID
+                                : next[i].chain_id || defaultNetwork.chainId,
+                          };
+                          setDraftSplits(next);
+                        }}
+                        chainId={
+                          mode === "testnet"
+                            ? 11155111
+                            : s.chain_id === SOLANA_CHAIN_ID
+                              ? undefined
+                              : s.chain_id || 11155111
+                        }
+                        label="Token"
+                        exclude={draftSplits
+                          .filter(
+                            (_, j) =>
+                              j !== i && draftSplits[j].chain_id === s.chain_id,
+                          )
+                          .map((x) => x.asset)}
+                      />
+                      {s.asset === "sol" ? (
+                        <div>
+                          <div className="section-label mb-1">Network</div>
+                          <div className="flex items-center gap-2 px-3 py-2 bg-overlay border border-rim font-mono text-xs text-ink">
+                            <img
+                              src="/token-sol.svg"
+                              alt=""
+                              className="w-4 h-4"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display =
+                                  "none";
+                              }}
+                            />
+                            Solana
+                          </div>
+                        </div>
+                      ) : mode === "mainnet" ? (
+                        <NetworkSelector
+                          networks={supportedNetworks}
+                          value={s.chain_id || defaultNetwork.chainId}
+                          onChange={(v) => {
+                            const next = [...draftSplits];
+                            next[i] = { ...next[i], chain_id: v };
+                            setDraftSplits(next);
+                          }}
+                          label="Network"
+                        />
+                      ) : (
+                        <div>
+                          <div className="section-label mb-1">Network</div>
+                          <div className="flex items-center gap-2 px-3 py-2 bg-overlay border border-rim font-mono text-xs text-ink">
+                            <img
+                              src="/token-eth.svg"
+                              alt=""
+                              className="w-4 h-4"
+                            />
+                            Sepolia
+                          </div>
+                        </div>
+                      )}
+                      <button
+                        onClick={() =>
+                          setDraftSplits(draftSplits.filter((_, j) => j !== i))
+                        }
+                        className="mb-0.5 p-2 text-muted hover:text-red transition-colors"
+                        title="Remove"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                    {s.asset !== "sol" && (
                       <input
-                        type="number"
-                        min={1}
-                        max={100}
-                        value={s.percent}
+                        type="text"
+                        placeholder="Custom delivery wallet (optional — leave empty to use your default)"
+                        value={s.settleAddress || ""}
                         onChange={(e) => {
                           const next = [...draftSplits];
                           next[i] = {
                             ...next[i],
-                            percent: Number(e.target.value),
+                            settleAddress: e.target.value || undefined,
                           };
                           setDraftSplits(next);
                         }}
-                        className="w-full px-2 py-2 bg-overlay border border-rim font-mono text-xs text-ink focus:outline-none focus:border-gold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        className="w-full px-3 py-2 bg-overlay border border-rim font-mono text-xs text-ink placeholder:text-muted focus:outline-none focus:border-gold"
                       />
-                    </div>
-                    <AssetSelector
-                      value={s.asset}
-                      onChange={(v) => {
-                        const next = [...draftSplits];
-                        next[i] = {
-                          ...next[i],
-                          asset: v,
-                          chain_id:
-                            v === "sol"
-                              ? SOLANA_CHAIN_ID
-                              : next[i].chain_id || defaultNetwork.chainId,
-                        };
-                        setDraftSplits(next);
-                      }}
-                      chainId={
-                        mode === "testnet"
-                          ? 11155111
-                          : s.chain_id === SOLANA_CHAIN_ID
-                            ? undefined
-                            : s.chain_id || 11155111
-                      }
-                      label="Token"
-                      exclude={draftSplits
-                        .filter((_, j) => j !== i && draftSplits[j].chain_id === s.chain_id)
-                        .map((x) => x.asset)}
-                    />
-                    {s.asset === "sol" ? (
-                      <div>
-                        <div className="section-label mb-1">Network</div>
-                        <div className="flex items-center gap-2 px-3 py-2 bg-overlay border border-rim font-mono text-xs text-ink">
-                          <img
-                            src="/token-sol.svg"
-                            alt=""
-                            className="w-4 h-4"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display =
-                                "none";
-                            }}
-                          />
-                          Solana
-                        </div>
-                      </div>
-                    ) : mode === "mainnet" ? (
-                      <NetworkSelector
-                        networks={supportedNetworks}
-                        value={s.chain_id || defaultNetwork.chainId}
-                        onChange={(v) => {
-                          const next = [...draftSplits];
-                          next[i] = { ...next[i], chain_id: v };
-                          setDraftSplits(next);
-                        }}
-                        label="Network"
-                      />
-                    ) : (
-                      <div>
-                        <div className="section-label mb-1">Network</div>
-                        <div className="flex items-center gap-2 px-3 py-2 bg-overlay border border-rim font-mono text-xs text-ink">
-                          <img
-                            src="/token-eth.svg"
-                            alt=""
-                            className="w-4 h-4"
-                          />
-                          Sepolia
-                        </div>
-                      </div>
                     )}
-                    <button
-                      onClick={() =>
-                        setDraftSplits(draftSplits.filter((_, j) => j !== i))
-                      }
-                      className="mb-0.5 p-2 text-muted hover:text-red transition-colors"
-                      title="Remove"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                  {s.asset !== "sol" && (
-                    <input
-                      type="text"
-                      placeholder="Custom delivery wallet (optional — leave empty to use your default)"
-                      value={s.settleAddress || ""}
-                      onChange={(e) => {
-                        const next = [...draftSplits];
-                        next[i] = { ...next[i], settleAddress: e.target.value || undefined };
-                        setDraftSplits(next);
-                      }}
-                      className="w-full px-3 py-2 bg-overlay border border-rim font-mono text-xs text-ink placeholder:text-muted focus:outline-none focus:border-gold"
-                    />
-                  )}
                   </div>
                 ))}
 
@@ -1113,14 +1294,16 @@ export default function EmployeePage() {
                       placeholder="e.g. 7xKX..."
                       className="w-full px-3 py-2 bg-overlay border border-gold/40 font-mono text-xs text-ink focus:outline-none focus:border-gold placeholder:text-faint"
                     />
-                    {solanaWalletAddress && solanaAddress !== solanaWalletAddress && (
-                      <button
-                        onClick={() => setSolanaAddress(solanaWalletAddress)}
-                        className="mt-1 font-mono text-xs text-muted hover:text-gold transition-colors"
-                      >
-                        Use connected Solana wallet ({solanaWalletAddress.slice(0, 8)}…)
-                      </button>
-                    )}
+                    {solanaWalletAddress &&
+                      solanaAddress !== solanaWalletAddress && (
+                        <button
+                          onClick={() => setSolanaAddress(solanaWalletAddress)}
+                          className="mt-1 font-mono text-xs text-muted hover:text-gold transition-colors"
+                        >
+                          Use connected Solana wallet (
+                          {solanaWalletAddress.slice(0, 8)}…)
+                        </button>
+                      )}
                   </div>
                 )}
 
@@ -1201,12 +1384,22 @@ export default function EmployeePage() {
 
               <div className="px-3 py-2.5 bg-overlay border border-rim space-y-1">
                 {splits.map((s, i) => (
-                  <div key={i} className="flex items-center gap-2 font-mono text-xs">
-                    <span className="text-gold font-bold w-8">{s.percent}%</span>
-                    <span className="text-ink">{s.asset === "eth" ? "WETH" : s.asset.toUpperCase()}</span>
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 font-mono text-xs"
+                  >
+                    <span className="text-gold font-bold w-8">
+                      {s.percent}%
+                    </span>
+                    <span className="text-ink">
+                      {s.asset === "eth" ? "WETH" : s.asset.toUpperCase()}
+                    </span>
                     <span className="text-muted">·</span>
                     <span className="text-muted">
-                      {s.asset === "sol" ? "Solana" : (getNetworkByChainId(s.chain_id)?.shortName ?? `chain ${s.chain_id}`)}
+                      {s.asset === "sol"
+                        ? "Solana"
+                        : (getNetworkByChainId(s.chain_id)?.shortName ??
+                          `chain ${s.chain_id}`)}
                     </span>
                   </div>
                 ))}
@@ -1226,12 +1419,15 @@ export default function EmployeePage() {
                   className="w-full px-3 py-2 bg-overlay border border-rim text-ink font-ui text-sm placeholder:text-placeholder focus:outline-none focus:border-gold"
                 />
                 {ensNameError && (
-                  <p className="mt-1 font-mono text-[10px] text-red">{ensNameError}</p>
+                  <p className="mt-1 font-mono text-[10px] text-red">
+                    {ensNameError}
+                  </p>
                 )}
                 {ensPublished && (
                   <div className="mt-1 flex items-center gap-1.5 font-mono text-[10px] text-teal">
                     <CheckCircle className="w-3 h-3 shrink-0" />
-                    Published on-chain — any PayFlow company can now read your splits from {ensName}
+                    Published on-chain — any PayFlow company can now read your
+                    splits from {ensName}
                   </div>
                 )}
               </div>
@@ -1253,7 +1449,9 @@ export default function EmployeePage() {
 
               <div className="border-t border-line pt-4 space-y-2">
                 <div className="font-mono text-[10px] text-muted leading-relaxed">
-                  Sync your payment history on-chain as <span className="text-ink">com.payflow.payments</span> — visible to anyone who resolves your ENS name.
+                  Sync your payment history on-chain as{" "}
+                  <span className="text-ink">com.payflow.payments</span> —
+                  visible to anyone who resolves your ENS name.
                 </div>
                 <button
                   onClick={handleSyncPaymentsToEns}

@@ -136,11 +136,19 @@ export async function runCreSimulation(triggerPayload, onProgress, timeoutMs = 9
       }
 
       // Parse the JSON result from workflow output.
-      // The CRE CLI prints the workflow return value at the end of stdout.
+      // The CRE CLI wraps the workflow return value as a JSON-encoded string:
+      //   "{\\"status\\":\\"ok\\",...}"
+      // So we need to double-parse: JSON.parse(line) → inner string → JSON.parse again.
       let result = null;
-      const jsonStart = fullOutput.lastIndexOf('{"status"');
-      if (jsonStart !== -1) {
-        try { result = JSON.parse(fullOutput.slice(jsonStart)); } catch { /* ignore */ }
+      const lines = fullOutput.split('\n');
+      const resultIdx = lines.findIndex(l => l.includes('Workflow Simulation Result'));
+      if (resultIdx !== -1) {
+        for (let i = resultIdx + 1; i < Math.min(resultIdx + 4, lines.length); i++) {
+          const line = lines[i].trim();
+          if (line.startsWith('"')) {
+            try { result = JSON.parse(JSON.parse(line)); break; } catch { /* ignore */ }
+          }
+        }
       }
       if (!result) {
         // fallback: find any JSON block with "status" and "results"

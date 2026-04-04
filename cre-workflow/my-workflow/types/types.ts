@@ -1,12 +1,13 @@
 export type Config = {
-  toleranceBps:      number;  // oracle deviation tolerance in bps (e.g. 8000 = 80% for testnet)
-  networkLabel:      string;  // human-readable label for logs (e.g. "Sepolia Testnet")
-  dispatcherAddress: string;  // PayrollDispatcher contract (empty = skip writeReport)
-  backendApiUrl:     string;  // PayFlow backend base URL (e.g. "http://localhost:3001")
-  uniswapApiKey:     string;  // Uniswap Trading API key
-  oracleRpc:         string;  // JSON-RPC URL for reading Chainlink feeds (Sepolia or Mainnet)
-  feedEthUsd:        string;  // Chainlink ETH/USD AggregatorV3 address
-  feedBtcUsd:        string;  // Chainlink BTC/USD AggregatorV3 address
+  toleranceBps:             number;  // oracle deviation tolerance in bps (e.g. 8000 = 80% for testnet)
+  networkLabel:             string;  // human-readable label for logs (e.g. "Sepolia Testnet")
+  dispatcherAddress:        string;  // PayrollDispatcher contract (empty = skip writeReport)
+  triggerContractAddress:   string;  // PayrollTrigger contract on Sepolia (empty = skip log trigger)
+  backendApiUrl:            string;  // PayFlow backend base URL (e.g. "http://localhost:3001")
+  uniswapApiKey:            string;  // Uniswap Trading API key
+  oracleRpc:                string;  // JSON-RPC URL for reading Chainlink feeds (Sepolia or Mainnet)
+  feedEthUsd:               string;  // Chainlink ETH/USD AggregatorV3 address
+  feedBtcUsd:               string;  // Chainlink BTC/USD AggregatorV3 address
 };
 
 export interface PayrollSplit {
