@@ -23,10 +23,22 @@ const _signers = new Map();
 
 function makeProvider(net) {
   const urls = [net.rpcUrl, ...(net.fallbackRpcUrls ?? [])];
-  if (urls.length === 1) return new ethers.JsonRpcProvider(urls[0]);
+  // staticNetwork prevents ethers from re-detecting the chain ID on every call.
+  // Without it, FallbackProvider probes all RPCs in parallel; if they respond
+  // at slightly different times ethers sees mismatched chain IDs and throws
+  // NETWORK_ERROR "network changed: 1 => 42161".
+  const network = ethers.Network.from(net.chainId);
+  if (urls.length === 1) {
+    return new ethers.JsonRpcProvider(urls[0], network, { staticNetwork: network });
+  }
   return new ethers.FallbackProvider(
-    urls.map((url, i) => ({ provider: new ethers.JsonRpcProvider(url), priority: i + 1, stallTimeout: 2000 })),
-    1, // quorum = 1 (first successful response wins)
+    urls.map((url, i) => ({
+      provider: new ethers.JsonRpcProvider(url, network, { staticNetwork: network }),
+      priority: i + 1,
+      stallTimeout: 2000,
+    })),
+    network,
+    { quorum: 1 },
   );
 }
 

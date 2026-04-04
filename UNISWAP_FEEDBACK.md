@@ -203,6 +203,67 @@ curl -X POST https://trade-api.gateway.uniswap.org/v1/quote \
 
 ---
 
+## Issue 7 — Cross-chain routes return 404 "No quotes available" below an undocumented minimum trade size
+
+**Description:**
+`POST /v1/quote` with `routingPreference: "BEST_PRICE"` for cross-chain routes returns `404 ResourceNotFound` / `"No quotes available"` when the input amount is below an undocumented threshold. There is no documented minimum trade size for cross-chain (bridge) routing, and no field in the error response indicating that the failure is amount-related rather than a missing route or unsupported pair.
+
+**Reproduce:**
+
+```bash
+# Route: USDC Arbitrum → WETH Base (cross-chain, small amount)
+# This pair has liquidity and is supported — but fails below ~$2–5 USDC
+curl -X POST https://trade-api.gateway.uniswap.org/v1/quote \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_KEY" \
+  -d '{
+    "type": "EXACT_INPUT",
+    "amount": "480000",
+    "tokenInChainId": 42161,
+    "tokenOutChainId": 8453,
+    "tokenIn": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    "tokenOut": "0x4200000000000000000000000000000000000006",
+    "swapper": "0xYOUR_RELAYER_ADDRESS",
+    "routingPreference": "BEST_PRICE"
+  }'
+```
+
+```bash
+# Also fails for same-asset cross-chain bridge (USDC Arbitrum → USDC Base)
+curl -X POST https://trade-api.gateway.uniswap.org/v1/quote \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_KEY" \
+  -d '{
+    "type": "EXACT_INPUT",
+    "amount": "400000",
+    "tokenInChainId": 42161,
+    "tokenOutChainId": 8453,
+    "tokenIn": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    "tokenOut": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "swapper": "0xYOUR_RELAYER_ADDRESS",
+    "routingPreference": "BEST_PRICE"
+  }'
+```
+
+**Tokens used:**
+
+- `tokenIn` — USDC on Arbitrum (`0xaf88d065e77c8cC2239327C5EDb3A432268e5831`)
+- `tokenOut` — WETH on Base (`0x4200000000000000000000000000000000000006`)
+- `tokenOut` — USDC on Base (`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`)
+
+**Observed:** `404 { "errorCode": "ResourceNotFound", "detail": "No quotes available" }` — identical to the response returned when a route genuinely doesn't exist (unsupported pair or chain). Increasing the amount above ~$5 USDC resolves the error immediately with no other changes.
+
+**Expected:** A distinct error code (e.g. `"AMOUNT_TOO_SMALL"`) or a `"minAmount"` field in the error body indicating the minimum accepted input for cross-chain routing.
+
+**Impact:** In a payroll system where an employee's salary is split across multiple chains, small per-split amounts routinely fall below the threshold. The generic 404 is indistinguishable from a "pair not supported" error, causing callers to waste time investigating route configuration rather than diagnosing a size constraint.
+
+**Suggested fix:** One of:
+- Return a distinct `errorCode` such as `"AMOUNT_BELOW_MINIMUM"` when the input is too small for bridge routing
+- Include a `"minAmount"` field in the 404 response body
+- Document the minimum cross-chain trade size per chain pair in the API reference
+
+---
+
 ## Issue 6 — Quote TTL (30s) too short for server-side relayer execution flow
 
 **Description:**
