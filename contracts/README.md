@@ -36,11 +36,11 @@ abi.encode(bytes32 payrollId, address treasury, address[] recipients, uint256[] 
 
 ## USDC Addresses
 
-| Network  | Chain ID | USDC                                         |
-| -------- | -------- | -------------------------------------------- |
-| Sepolia  | 11155111 | `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` |
-| Arbitrum | 42161    | `0xaf88d065e77c8cC2239327C5EDb3A432268e5831` |
-| Base     | 8453     | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
+| Network | Chain ID | USDC |
+|---------|----------|------|
+| Sepolia | 11155111 | `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` |
+| Arbitrum | 42161 | `0xaf88d065e77c8cC2239327C5EDb3A432268e5831` |
+| Base | 8453 | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 
 ---
 
@@ -48,11 +48,11 @@ abi.encode(bytes32 payrollId, address treasury, address[] recipients, uint256[] 
 
 Populated automatically by the deploy script into `deployments.json`.
 
-| Network  | Contract          | Address                                     |
-| -------- | ----------------- | ------------------------------------------- |
-| Sepolia  | PayrollDispatcher | _deploy via `scripts/deploy-dispatcher.js`_ |
+| Network | Contract | Address |
+|---------|----------|---------|
+| Sepolia | PayrollDispatcher | _deploy via `scripts/deploy-dispatcher.js`_ |
 | Arbitrum | PayrollDispatcher | _deploy via `scripts/deploy-dispatcher.js`_ |
-| Base     | PayrollDispatcher | _deploy via `scripts/deploy-dispatcher.js`_ |
+| Base | PayrollDispatcher | _deploy via `scripts/deploy-dispatcher.js`_ |
 
 ---
 
@@ -104,7 +104,6 @@ npx hardhat run scripts/deploy-dispatcher.js --network base
 ```
 
 The deploy script automatically:
-
 - Writes the deployed address to `deployments.json`
 - Updates `dispatcherAddress` in `cre-workflow/config/config.staging.json`
 - Updates `PAYROLL_DISPATCHER_ADDRESS` in `backend/.env`
@@ -138,11 +137,7 @@ npx hardhat verify --network base      <address> <USDC_ADDRESS> <CRE_FORWARDER_A
 **Check treasury allowance before payroll:**
 
 ```js
-const dispatcher = new ethers.Contract(
-  DISPATCHER_ADDRESS,
-  DISPATCHER_ABI,
-  provider,
-);
+const dispatcher = new ethers.Contract(DISPATCHER_ADDRESS, DISPATCHER_ABI, provider);
 const allowance = await dispatcher.approvedAllowance(treasuryAddress);
 ```
 
