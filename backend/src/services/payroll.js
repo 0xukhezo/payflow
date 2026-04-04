@@ -31,16 +31,11 @@ export async function runPayroll(company, onProgress = () => {}, networkMode = "
     throw new Error("No employees to pay");
   }
 
-  const eligible = company.employees.filter((e) => e.worldIdVerified);
-  if (eligible.length === 0) {
-    throw new Error("No World ID verified employees to pay");
-  }
-
   const paymentAsset   = (company.paymentAsset || "usdc").toLowerCase();
   const depositChainId = company.chainId || DEFAULT_COMPANY_CHAIN_ID;
 
   // Expand employees into payment units (one per split, or one per employee)
-  const paymentUnits = expandToPaymentUnits(eligible, DEFAULT_EMPLOYEE_CHAIN_ID);
+  const paymentUnits = expandToPaymentUnits(company.employees, DEFAULT_EMPLOYEE_CHAIN_ID);
 
   // --- Pre-flight: quote + attest all payment units ---
   onProgress({ id: "preflight", label: `Verifying rates for ${paymentUnits.length} payment(s)...`, status: "running" });
@@ -378,15 +373,6 @@ export async function runPayroll(company, onProgress = () => {}, networkMode = "
     paidResults.push(result);
   }
 
-  const unverified = company.employees
-    .filter((e) => !e.worldIdVerified)
-    .map((e) => ({
-      employeeId:   e.id,
-      employeeName: e.name,
-      skipped:      true,
-      reason:       "World ID verification required",
-    }));
-
-  return [...paidResults, ...unverified];
+  return paidResults;
 }
 

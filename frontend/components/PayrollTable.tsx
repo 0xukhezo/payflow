@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState } from "react";
-import { WorldIdBadge } from "./WorldIdBadge";
 import { API_URL } from "@/lib/contracts";
 import { getNetworkByChainId } from "@/lib/networks";
 import { useToast } from "@/components/Toast";
@@ -63,7 +62,6 @@ interface Employee {
   settleAddress: string;
   solanaAddress?: string | null;
   salaryAmount: number;
-  worldIdVerified?: boolean;
   splits?: PayrollSplit[];
 }
 
@@ -136,7 +134,7 @@ export function PayrollTable({ employees, companyId, onAddEmployee, onEmployeeRe
         <table className="w-full" style={{ borderCollapse: "collapse" }}>
           <thead>
             <tr className="border-b border-line">
-              {["Name", "Verified", "Receives", "Network", "Salary", "Settlement Address", "Status", "Attestation", ""].map((h) => (
+              {["Name", "Receives", "Network", "Salary", "Settlement Address", "Status", "Attestation", ""].map((h) => (
                 <th key={h} className="text-left py-3 px-4 section-label font-normal">{h}</th>
               ))}
             </tr>
@@ -151,17 +149,12 @@ export function PayrollTable({ employees, companyId, onAddEmployee, onEmployeeRe
             ) : (
               employees.map((emp) => {
                 const hasSplits = emp.splits && emp.splits.length > 0 && emp.splits.reduce((s, x) => s + x.percent, 0) === 100;
-                const rowClass = !emp.worldIdVerified
-                  ? "border-b border-line opacity-50"
-                  : `${hasSplits ? "" : "border-b border-line"} hover:bg-white/[0.02] transition-colors`;
+                const rowClass = `${hasSplits ? "" : "border-b border-line"} hover:bg-white/[0.02] transition-colors`;
 
                 return (
                   <React.Fragment key={emp.id}>
                   <tr className={rowClass}>
                     <td className="py-3 px-4 text-ink font-medium">{emp.name}</td>
-                    <td className="py-3 px-4 whitespace-nowrap">
-                      <WorldIdBadge verified={emp.worldIdVerified ?? false} />
-                    </td>
                     <td className="py-3 px-4">
                       {hasSplits ? <span className="text-faint">—</span> : <TokenBadge asset={emp.preferredAsset} />}
                     </td>
@@ -243,7 +236,6 @@ export function PayrollTable({ employees, companyId, onAddEmployee, onEmployeeRe
                       <td className="py-1.5 px-4 pl-8">
                         <span className="font-mono text-[10px] text-faint">↳ split {i + 1}/{emp.splits!.length}</span>
                       </td>
-                      <td className="py-1.5 px-4" />
                       <td className="py-1.5 px-4">
                         <span className="inline-flex items-center gap-1.5">
                           <TokenBadge asset={split.asset} />

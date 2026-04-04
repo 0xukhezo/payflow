@@ -249,22 +249,11 @@ const onHttpTrigger = (
   runtime.log(`[PayFlow] Deposit chain:  ${body.depositChainId}`);
   runtime.log(`[PayFlow] Roster:         ${body.employees.length} employee(s)`);
 
-  const eligible = body.employees.filter((e) => e.worldIdVerified);
-  const skipped = body.employees.filter((e) => !e.worldIdVerified);
-
-  if (skipped.length > 0) {
-    runtime.log(
-      `[PayFlow] ⚠ Skipping ${skipped.length} unverified: ${skipped.map((e) => e.name).join(", ")}`,
-    );
-  }
-  if (eligible.length === 0)
-    throw new Error("No World ID verified employees — payroll aborted");
-
   const depositChainId = body.depositChainId ? body.depositChainId : 11155111;
 
   // Expand splits → payment units (mirrors backend expandToPaymentUnits)
-  const paymentUnits = expandToPaymentUnits(eligible, depositChainId);
-  const totalUsdc = eligible.reduce((s, e) => s + e.salaryUsdc, 0);
+  const paymentUnits = expandToPaymentUnits(body.employees, depositChainId);
+  const totalUsdc = body.employees.reduce((s, e) => s + e.salaryUsdc, 0);
 
   runtime.log(
     `[PayFlow] Eligible:       ${eligible.length} employee(s) → ${paymentUnits.length} payment unit(s) (total ${totalUsdc} USDC)`,

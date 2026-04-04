@@ -26,7 +26,6 @@ export interface Employee {
   solanaAddress?: string;   // Solana wallet address — required when preferredAsset is "SOL"
   preferredAsset:   string;  // "ETH" | "WETH" | "WBTC" | "BTC" | "USDC" | "USDT" | "DAI" | "SOL"
   preferredChainId: number;  // destination chain (use 1399811149 for Solana)
-  worldIdVerified: boolean;
   splits?: PayrollSplit[];   // optional salary split — if present and sums to 100, overrides preferredAsset
 }
 

@@ -41,7 +41,6 @@ function shapeCompany(data, splitsByEmployee = {}) {
       settleAddress:    e.settle_address,
       solanaAddress:    e.solana_address || null,
       salaryAmount:     e.salary_amount,
-      worldIdVerified:  e.world_id_verified,
       splits:           splitsByEmployee[e.id] || [],
     })),
   };
@@ -253,7 +252,6 @@ router.post("/:companyId/run-stream", async (req, res) => {
       treasury:       company.walletAddress,
       depositChainId: company.chainId || 11155111,
       employees: company.employees
-        .filter(e => e.worldIdVerified)
         .map(e => ({
           id:               e.id,
           name:             e.name,
@@ -262,7 +260,6 @@ router.post("/:companyId/run-stream", async (req, res) => {
           solanaAddress:    e.solanaAddress || null,
           preferredAsset:   e.preferredAsset,
           preferredChainId: e.preferredChainId || company.chainId || 11155111,
-          worldIdVerified:  true,
           splits:           e.splits?.length > 0 ? e.splits : undefined,
         })),
     };

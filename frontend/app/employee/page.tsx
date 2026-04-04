@@ -4,16 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import { useAppKitAccount } from "@reown/appkit/react";
 import { createPublicClient, http, parseAbi } from "viem";
 import { AuthGate } from "@/components/AuthGate";
-import {
-  IDKitRequestWidget,
-  orbLegacy,
-  type RpContext,
-  type IDKitResult,
-} from "@worldcoin/idkit";
 import { AppNav } from "@/components/AppNav";
 import { WalletCard } from "@/components/WalletCard";
 import { SalaryHistory } from "@/components/SalaryHistory";
-import { WorldIdBadge } from "@/components/WorldIdBadge";
 import { AssetSelector } from "@/components/AssetSelector";
 import { NetworkSelector } from "@/components/NetworkSelector";
 import { useNetworkMode } from "@/lib/network-mode";
@@ -27,10 +20,6 @@ const ERC20_BALANCE_ABI = parseAbi([
   "function balanceOf(address) view returns (uint256)",
 ]);
 
-const WORLD_APP_ID = (process.env.NEXT_PUBLIC_WORLD_APP_ID ||
-  "") as `app_${string}`;
-const WORLD_ACTION = process.env.NEXT_PUBLIC_WORLD_ACTION || "verify-employee";
-
 interface EmployeeRecord {
   employeeId: string;
   companyId: string;
@@ -40,10 +29,8 @@ interface EmployeeRecord {
   settleAddress: string;
   solanaAddress: string | null;
   salaryAmount: number;
-  worldIdVerified: boolean;
   company: { id: string; name: string; paymentAsset: string };
 }
-
 
 export default function EmployeePage() {
   const { address: evmAddress, isConnected: evmConnected } = useAppKitAccount({
@@ -63,10 +50,6 @@ export default function EmployeePage() {
     null,
   );
   const [isCompanyOwner, setIsCompanyOwner] = useState(false);
-  const [isWorldIdVerified, setIsWorldIdVerified] = useState(false);
-  const [rpContext, setRpContext] = useState<RpContext | null>(null);
-  const [widgetOpen, setWidgetOpen] = useState(false);
-  const [worldIdError, setWorldIdError] = useState<string | null>(null);
   const [tokenBalance, setTokenBalance] = useState<string | null>(null);
   const [solanaBalance, setSolanaBalance] = useState<string | null>(null);
 
@@ -123,9 +106,6 @@ export default function EmployeePage() {
     const addr = primaryWallet.address;
     const addrKey = addr.toLowerCase();
     setIsCompanyOwner(!!localStorage.getItem(`payflow_company_id_${addrKey}`));
-    setIsWorldIdVerified(
-      !!localStorage.getItem(`payflow_worldid_verified_${addrKey}`),
-    );
 
     // Check for existing pending join request
     fetch(`${API_URL}/api/company/join-requests/by-address/${addr}`)
@@ -160,35 +140,8 @@ export default function EmployeePage() {
               ),
             )
             .catch(() => {});
-          // Sync World ID status from DB
-          if (data.worldIdVerified) {
-            localStorage.setItem(`payflow_worldid_verified_${addrKey}`, "1");
-            setIsWorldIdVerified(true);
-          } else {
-            localStorage.removeItem(`payflow_worldid_verified_${addrKey}`);
-            setIsWorldIdVerified(false);
-          }
         } else {
           setRecord("not-found");
-          // Check backend for pre-verification (verified before being added to any payroll)
-          fetch(`${API_URL}/api/worldid/verified/${addr}`)
-            .then((r) => r.json())
-            .then((d) => {
-              if (d.verified) {
-                localStorage.setItem(
-                  `payflow_worldid_verified_${addrKey}`,
-                  "1",
-                );
-                setIsWorldIdVerified(true);
-              } else {
-                localStorage.removeItem(`payflow_worldid_verified_${addrKey}`);
-                setIsWorldIdVerified(false);
-              }
-            })
-            .catch(() => {
-              localStorage.removeItem(`payflow_worldid_verified_${addrKey}`);
-              setIsWorldIdVerified(false);
-            });
         }
       })
       .catch(() => setRecord("not-found"));
@@ -251,63 +204,6 @@ export default function EmployeePage() {
         setSolanaBalance(null);
       });
   }, [solanaWalletAddress]);
-
-  const openWorldId = async () => {
-    setWorldIdError(null);
-    try {
-      const res = await fetch(`${API_URL}/api/worldid/sign-request`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: WORLD_ACTION }),
-      });
-      const data = await res.json();
-      if (!res.ok)
-        throw new Error(data.error || "Failed to get request context");
-      setRpContext(data);
-      setWidgetOpen(true);
-    } catch (err: unknown) {
-      const msg = friendlyError(err);
-      setWorldIdError(msg);
-      toast("error", msg);
-    }
-  };
-
-  const handleVerify = async (result: IDKitResult) => {
-    if (!rpContext) throw new Error("No RP context");
-    const emp = record && record !== "not-found" ? record : null;
-    const res = await fetch(`${API_URL}/api/worldid/verify`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        rp_id: rpContext.rp_id,
-        idkitResponse: result,
-        employeeId: emp?.employeeId,
-        companyId: emp?.companyId,
-        walletAddress: emp ? undefined : evmAddress,
-      }),
-    });
-    if (!res.ok) {
-      const data = await res.json();
-      const msg = data.error || "Verification failed";
-      setWorldIdError(msg);
-      toast("error", msg);
-      throw new Error(msg);
-    }
-  };
-
-  const handleWorldIdSuccess = async (_result: IDKitResult) => {
-    if (evmAddress) {
-      localStorage.setItem(
-        `payflow_worldid_verified_${evmAddress.toLowerCase()}`,
-        "1",
-      );
-    }
-    setIsWorldIdVerified(true);
-    if (record && record !== "not-found") {
-      setRecord({ ...record, worldIdVerified: true });
-    }
-    toast("success", "World ID verified.");
-  };
 
   const handleSaveSplits = async () => {
     if (!record || record === "not-found") return;
@@ -435,10 +331,6 @@ export default function EmployeePage() {
     }
   };
 
-  const handleOpenChange = (isOpen: boolean) => {
-    setWidgetOpen(isOpen);
-    if (!isOpen) setRpContext(null);
-  };
 
   /* ── Auth gate ─────────────────────────────────────────────── */
   if (!primaryWallet)
@@ -535,7 +427,6 @@ export default function EmployeePage() {
                   Your Payroll Record
                 </div>
               </div>
-              <WorldIdBadge verified={isWorldIdVerified} />
             </div>
 
             <div className="px-6">
@@ -1041,50 +932,6 @@ export default function EmployeePage() {
                   </button>
                 </div>
               </div>
-            )}
-          </div>
-        )}
-
-        {/* World ID verification — only relevant for EVM identity */}
-        {!isWorldIdVerified && evmConnected && (
-          <div className="bg-surface border border-line p-6">
-            <div className="font-heading text-sm font-bold text-ink mb-2">
-              Verify your identity
-            </div>
-            <p className="text-xs text-muted leading-relaxed mb-5">
-              Verify with World ID so your company can run payroll for you. Each
-              person can only register once — no duplicate accounts.
-            </p>
-            {worldIdError && (
-              <p className="mb-4 font-mono text-xs text-red">{worldIdError}</p>
-            )}
-            {WORLD_APP_ID ? (
-              <>
-                {rpContext && (
-                  <IDKitRequestWidget
-                    open={widgetOpen}
-                    onOpenChange={handleOpenChange}
-                    app_id={WORLD_APP_ID}
-                    action={WORLD_ACTION}
-                    rp_context={rpContext}
-                    allow_legacy_proofs={true}
-                    preset={orbLegacy()}
-                    environment={"staging"}
-                    handleVerify={handleVerify}
-                    onSuccess={handleWorldIdSuccess}
-                  />
-                )}
-                <button
-                  onClick={openWorldId}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-violet/10 border border-violet/30 text-violet font-mono text-xs font-bold tracking-widest transition-all hover:brightness-110"
-                >
-                  VERIFY WITH WORLD ID →
-                </button>
-              </>
-            ) : (
-              <p className="font-mono text-xs text-faint">
-                World ID not configured (NEXT_PUBLIC_WORLD_APP_ID missing)
-              </p>
             )}
           </div>
         )}

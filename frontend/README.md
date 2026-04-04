@@ -74,7 +74,6 @@ const { walletProvider } = useAppKitProvider("eip155");
 | `AssetSelector`    | Dropdown for selecting preferred token (including SOL)       |
 | `NetworkSelector`  | Dropdown for selecting the settlement network                |
 | `AttestationBadge` | Shows Chainlink oracle deviation % and PASS/FAIL             |
-| `WorldIdBadge`     | Shows World ID verification status                           |
 | `AppNav`           | Navigation bar with network mode toggle                      |
 | `HomeNav`          | Landing page navigation                                      |
 | `Toast`            | Toast notification system                                    |
@@ -89,8 +88,6 @@ Create `frontend/.env.local`:
 ```env
 NEXT_PUBLIC_REOWN_PROJECT_ID=    # from https://cloud.reown.com
 NEXT_PUBLIC_API_URL=http://localhost:3001   # backend URL
-NEXT_PUBLIC_WORLD_APP_ID=        # app_xxxx from developer.world.org
-NEXT_PUBLIC_WORLD_ACTION=        # action string (e.g. "verify-employee")
 ```
 
 ---
@@ -141,7 +138,6 @@ The backend must be deployed separately (Railway, Render, or similar) before the
 | `react`                       | 19.2.4  | UI                                    |
 | `@reown/appkit`               | latest  | Wallet connection + signing           |
 | `@reown/appkit-adapter-wagmi` | latest  | EVM wallet connectors                 |
-| `@worldcoin/idkit`            | ^4.0    | World ID v4 verification widget       |
 | `viem`                        | latest  | Typed contract calls for USDC approve |
 | `ethers`                      | ^6.16   | BrowserProvider, tx signing           |
 | `tailwindcss`                 | ^4      | Styling                               |

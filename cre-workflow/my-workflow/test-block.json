@@ -11,7 +11,6 @@
       "solanaAddress": "Fcy2yTbdKPREQXH6yqfRioropPofFvDtCVQpe98CZLuM",
       "preferredAsset": "usdc",
       "preferredChainId": 42161,
-      "worldIdVerified": true,
       "splits": [
         {
           "percent": 15,

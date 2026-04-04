@@ -16,10 +16,7 @@ export function HeroCTAs() {
       router.replace("/company");
       return;
     }
-    const addr = primaryWallet.address.toLowerCase();
-    if (localStorage.getItem(`payflow_worldid_verified_${addr}`)) {
-      router.replace("/employee");
-    }
+    router.replace("/employee");
   }, [isCompany, primaryWallet?.address]);
 
   // Show nothing during hydration / backend lookup

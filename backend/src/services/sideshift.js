@@ -130,7 +130,6 @@ export async function createOrder(quote, settleAddress) {
   const body = {
     quoteId:       quote.quoteId,
     settleAddress,
-    affiliateId:   process.env.SIDESHIFT_AFFILIATE_ID || undefined,
   };
 
   const data = await apiFetch("/shifts/fixed", {

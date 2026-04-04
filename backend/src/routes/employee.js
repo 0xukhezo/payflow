@@ -27,7 +27,6 @@ router.get("/by-wallet/:address", async (req, res) => {
       settleAddress: data.settle_address,
       solanaAddress: data.solana_address || null,
       salaryAmount: data.salary_amount,
-      worldIdVerified: data.world_id_verified,
       company: {
         id: data.companies.id,
         name: data.companies.name,

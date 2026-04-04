@@ -52,7 +52,6 @@ function shapeEmployee(e) {
     settleAddress:    e.settle_address,
     solanaAddress:    e.solana_address || null,
     salaryAmount:     e.salary_amount,
-    worldIdVerified:  e.world_id_verified,
     addedAt:          e.added_at,
     ...(splits.length > 0 && { splits }),
   };
@@ -151,7 +150,7 @@ router.get("/by-treasury/:address/cre-payload", async (req, res) => {
     const addr = req.params.address.toLowerCase();
     const { data: company, error } = await supabase
       .from("companies")
-      .select("id, wallet_address, chain_id, payment_asset, employees(id, name, salary_amount, preferred_asset, preferred_chain_id, settle_address, solana_address, world_id_verified)")
+      .select("id, wallet_address, chain_id, payment_asset, employees(id, name, salary_amount, preferred_asset, preferred_chain_id, settle_address, solana_address)")
       .ilike("wallet_address", addr)
       .single();
 
@@ -183,7 +182,6 @@ router.get("/by-treasury/:address/cre-payload", async (req, res) => {
       solanaAddress:    emp.solana_address ?? null,
       preferredAsset:   emp.preferred_asset,
       preferredChainId: emp.preferred_chain_id ?? depositChainId,
-      worldIdVerified:  emp.world_id_verified ?? false,
       ...(splitsByEmp[emp.id]?.length > 0 && { splits: splitsByEmp[emp.id] }),
     }));
 
@@ -392,23 +390,6 @@ router.post("/:id/join-requests/:requestId/accept", async (req, res) => {
     .single();
 
   // Check if this address has been pre-verified via World ID (before having an employee record)
-  const { data: preVerified } = await supabase
-    .from("world_id_verifications")
-    .select("address")
-    .ilike("address", jr.employee_address)
-    .maybeSingle();
-
-  // Also check existing employee records for this address
-  const { data: existingVerified } = !preVerified
-    ? await supabase
-        .from("employees")
-        .select("world_id_verified")
-        .ilike("settle_address", jr.employee_address)
-        .eq("world_id_verified", true)
-        .limit(1)
-        .maybeSingle()
-    : { data: null };
-
   const employeeId = randomUUID();
   const { error: empErr } = await supabase.from("employees").insert({
     id:                employeeId,
@@ -419,7 +400,6 @@ router.post("/:id/join-requests/:requestId/accept", async (req, res) => {
     settle_address:    jr.employee_address,
     solana_address:    jr.solana_address || null,
     salary_amount:     Number(salaryAmount),
-    world_id_verified: !!preVerified || !!existingVerified,
   });
   if (empErr) return res.status(500).json({ error: empErr.message });
 

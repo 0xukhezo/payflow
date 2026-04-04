@@ -9,8 +9,7 @@ Chainlink CRE workflow that orchestrates PayFlow payroll runs on the Decentralis
 3. **USDC peg check** — verifies the stablecoin peg (assumed stable, logged for attestation).
 4. **Backend quotes** (1 HTTP request) — calls `/api/payroll/:companyId/cre-quotes` to fetch all Uniswap/SideShift quotes in one batch. Handles two-hop routing (bridge + swap) for cross-chain payments.
 5. **Rate attestation** — verifies each quote against Chainlink oracle prices. Payments outside `toleranceBps` are flagged and blocked.
-6. **World ID gate** — employees with `worldIdVerified: false` are skipped entirely.
-7. **On-chain report** (evm-write, optional) — if `dispatcherAddress` is set, sends an ABI-encoded payroll manifest to `PayrollDispatcher.sol` via `writeReport`.
+6. **On-chain report** (evm-write, optional) — if `dispatcherAddress` is set, sends an ABI-encoded payroll manifest to `PayrollDispatcher.sol` via `writeReport`.
 8. **Backend dispatch** (1 HTTP request) — calls `/api/payroll/:companyId/run` to execute the actual token transfers.
 
 **Total HTTP budget: 4 requests** (2 Chainlink + 1 quotes + 1 dispatch), well within the CRE 5-request limit.
@@ -31,7 +30,6 @@ Chainlink CRE workflow that orchestrates PayFlow payroll runs on the Decentralis
       "solanaAddress": "SolanaBase58Address",
       "preferredAsset": "WETH",
       "preferredChainId": 42161,
-      "worldIdVerified": true,
       "splits": [
         {
           "percent": 50,
