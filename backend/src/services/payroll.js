@@ -136,18 +136,39 @@ export async function runPayroll(company, onProgress = () => {}, networkMode = "
     const totalAmount = eligible.reduce((sum, e) => sum + (e.salaryAmount || 0), 0);
     const assetLabel  = paymentAsset.toUpperCase();
     onProgress({ id: "treasury", label: `Pulling ${totalAmount} ${assetLabel} from treasury...`, status: "running" });
-    try {
-      const pullTxHash = await pullFromTreasury(paymentAsset, company.walletAddress, totalAmount, depositChainId);
+
+    const MAX_PULL_ATTEMPTS = 3;
+    let pullTxHash = null;
+    let lastErr    = null;
+    for (let attempt = 1; attempt <= MAX_PULL_ATTEMPTS; attempt++) {
+      try {
+        pullTxHash = await pullFromTreasury(paymentAsset, company.walletAddress, totalAmount, depositChainId);
+        break;
+      } catch (err) {
+        lastErr = err;
+        const raw = (err.reason || err.message || "").toLowerCase();
+        // Don't retry permanent errors — balance and allowance issues won't fix themselves.
+        if (raw.includes("exceeds balance") || raw.includes("insufficient") || raw.includes("allowance") || raw.includes("approve")) {
+          break;
+        }
+        if (attempt < MAX_PULL_ATTEMPTS) {
+          onProgress({ id: "treasury", label: `Pull attempt ${attempt} failed — retrying...`, status: "running" });
+          await new Promise(r => setTimeout(r, 2000 * attempt));
+        }
+      }
+    }
+
+    if (pullTxHash) {
       onProgress({ id: "treasury", label: `${totalAmount} ${assetLabel} pulled`, status: "done", txHash: pullTxHash });
-    } catch (err) {
-      const raw = (err.reason || err.message || "").toLowerCase();
+    } else {
+      const raw   = (lastErr.reason || lastErr.message || "").toLowerCase();
       const label = raw.includes("exceeds balance") || raw.includes("insufficient")
         ? `${assetLabel} pull failed — insufficient treasury balance`
         : raw.includes("allowance") || raw.includes("approve")
         ? `${assetLabel} pull failed — spending not approved`
-        : `${assetLabel} pull failed`;
+        : `${assetLabel} pull failed after ${MAX_PULL_ATTEMPTS} attempts`;
       onProgress({ id: "treasury", label, status: "error" });
-      throw err;
+      throw lastErr;
     }
   }
 
