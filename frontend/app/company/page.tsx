@@ -59,6 +59,7 @@ interface Employee {
   preferredAsset: string;
   preferredChainId: number;
   settleAddress: string;
+  solanaAddress?: string | null;
   salaryAmount: number;
   splits?: PayrollSplit[];
 }

@@ -103,6 +103,7 @@ function shapeEmployee(e) {
     preferredAsset:   e.preferred_asset,
     preferredChainId: e.preferred_chain_id || DEFAULT_CHAIN_ID,
     settleAddress:    e.settle_address,
+    solanaAddress:    e.solana_address || null,
     salaryAmount:     e.salary_amount,
     worldIdVerified:  e.world_id_verified,
     addedAt:          e.added_at,

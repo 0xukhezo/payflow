@@ -1102,7 +1102,7 @@ export default function EmployeePage() {
             {!editingSplits ? (
               <div className="px-6 py-4">
                 {splits.length > 0 ? (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {splits.map((s, i) => {
                       const isSolana = s.asset.toLowerCase() === "sol";
                       const net = isSolana
@@ -1112,7 +1112,7 @@ export default function EmployeePage() {
                       const symbol =
                         asset === "eth" ? "WETH" : asset.toUpperCase();
                       return (
-                        <div key={i} className="space-y-0.5">
+                        <div key={i} className="space-y-1">
                           <div className="flex items-center gap-3">
                             <span className="font-mono font-bold text-gold w-10 text-sm">
                               {s.percent}%
@@ -1128,22 +1128,35 @@ export default function EmployeePage() {
                             />
                             <span className="text-sm text-ink">{symbol}</span>
                             {isSolana ? (
-                              <span className="font-mono text-xs text-muted">
-                                · Solana
-                              </span>
+                              <span className="font-mono text-xs text-muted">· Solana</span>
                             ) : (
                               net && (
-                                <span className="font-mono text-xs text-muted">
-                                  · {net.shortName}
-                                </span>
+                                <span className="font-mono text-xs text-muted">· {net.shortName}</span>
                               )
                             )}
+                            {(() => {
+                              const addr = isSolana
+                                ? (record.solanaAddress || solanaAddress || null)
+                                : (s.settleAddress || record.settleAddress || null);
+                              return addr ? (
+                                <span className="font-mono text-[10px] text-faint truncate max-w-[180px]">
+                                  · {addr.slice(0, 6)}…{addr.slice(-4)}
+                                </span>
+                              ) : null;
+                            })()}
                           </div>
-                          {s.settleAddress && (
-                            <div className="pl-[52px] font-mono text-[10px] text-muted truncate">
-                              → {s.settleAddress}
+                          {/* Animated percentage bar */}
+                          <div className="pl-[52px]">
+                            <div className="h-[3px] w-full bg-white/6 overflow-hidden">
+                              <div
+                                className="h-full bg-gold/70 origin-left"
+                                style={{
+                                  width: `${s.percent}%`,
+                                  animation: `barGrow 0.6s cubic-bezier(0.4,0,0.2,1) ${i * 80}ms both`,
+                                }}
+                              />
                             </div>
-                          )}
+                          </div>
                         </div>
                       );
                     })}

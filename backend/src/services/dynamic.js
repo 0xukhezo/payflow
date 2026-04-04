@@ -21,12 +21,21 @@ const ERC20_ABI = [
 // Singleton NonceManager per chainId — prevents concurrent tx nonce collisions
 const _signers = new Map();
 
+function makeProvider(net) {
+  const urls = [net.rpcUrl, ...(net.fallbackRpcUrls ?? [])];
+  if (urls.length === 1) return new ethers.JsonRpcProvider(urls[0]);
+  return new ethers.FallbackProvider(
+    urls.map((url, i) => ({ provider: new ethers.JsonRpcProvider(url), priority: i + 1, stallTimeout: 2000 })),
+    1, // quorum = 1 (first successful response wins)
+  );
+}
+
 function getRelayerSigner(chainId) {
   if (_signers.has(chainId)) return _signers.get(chainId);
   const relayerKey = process.env.RELAYER_PRIVATE_KEY;
   if (!relayerKey) throw new Error("RELAYER_PRIVATE_KEY not set");
   const net     = getNetwork(chainId);
-  const provider = new ethers.JsonRpcProvider(net.rpcUrl);
+  const provider = makeProvider(net);
   const wallet  = new ethers.Wallet(relayerKey, provider);
   const signer  = new ethers.NonceManager(wallet);
   _signers.set(chainId, signer);

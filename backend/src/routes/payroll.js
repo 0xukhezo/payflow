@@ -3,7 +3,7 @@ import { supabase } from "../db/supabase.js";
 import { runPayroll, payrollRuns } from "../services/payroll.js";
 import { getQuote, getSwapStatus } from "../services/uniswap.js";
 import { getQuote as getSideShiftQuote } from "../services/sideshift.js";
-import { runCreSimulation } from "../services/cre-runner.js";
+import { runCreSimulation, getCreBackendUrl } from "../services/cre-runner.js";
 import { getChainlinkPriceByMode } from "../services/chainlink.js";
 
 const router = Router();
@@ -297,8 +297,44 @@ router.post("/:companyId/run-stream", async (req, res) => {
         const POLL_MS    = 300;
         const MAX_POLLS  = Math.ceil(180_000 / POLL_MS); // 3-minute ceiling
 
-        const pollId = setInterval(() => {
+        const remoteBase = getCreBackendUrl();
+        const isRemote   = remoteBase && !remoteBase.includes("localhost") && !remoteBase.includes("127.0.0.1");
+
+        const pollId = setInterval(async () => {
           attempts++;
+
+          // ── Remote backend (Railway) ────────────────────────────────────────
+          // CRE dispatched to a remote URL — poll that backend's status endpoint.
+          if (isRemote) {
+            try {
+              const r = await fetch(`${remoteBase}/api/payroll/${data.id}/status`, { signal: AbortSignal.timeout(4000) });
+              const s = await r.json();
+              for (const step of s.steps ?? []) {
+                const key = `${step.id}:${step.status}`;
+                if (!seen.has(key)) { seen.add(key); emit({ type: "step", ...step }); }
+              }
+              if (s.status === "done" || s.status === "error" || attempts >= MAX_POLLS) {
+                clearInterval(pollId);
+                if (s.status === "done") {
+                  emit({ type: "done", companyId: data.id, results: s.results ?? [] });
+                } else if (s.status === "error") {
+                  emit({ type: "error", message: s.error ?? "Payroll execution failed" });
+                } else if (attempts >= MAX_POLLS) {
+                  emit({ type: "error", message: "Payroll execution timed out" });
+                }
+                if (s.status === "done" || s.status === "error" || attempts >= MAX_POLLS) resolve();
+              }
+            } catch {
+              if (attempts >= MAX_POLLS) {
+                clearInterval(pollId);
+                emit({ type: "error", message: "Could not reach remote backend for status" });
+                resolve();
+              }
+            }
+            return;
+          }
+
+          // ── Local backend ───────────────────────────────────────────────────
           const s = companyRunStatus.get(data.id);
 
           // No status entry yet (company not in Supabase — simulation-only)

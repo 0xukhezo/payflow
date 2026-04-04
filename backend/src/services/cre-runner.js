@@ -12,10 +12,10 @@
  *     Spawns `cre workflow simulate` as a local subprocess and streams the
  *     attestation results back through the SSE connection.
  */
-import { spawn }                    from "child_process";
-import path                         from "path";
-import { fileURLToPath }            from "url";
-import { symlinkSync, existsSync }  from "fs";
+import { spawn }                       from "child_process";
+import path                            from "path";
+import { fileURLToPath }               from "url";
+import { symlinkSync, existsSync, readFileSync } from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = path.dirname(__filename);
@@ -32,6 +32,17 @@ const REAL_CONFIG_PATH = path.join(CRE_PROJECT_DIR, "my-workflow/config/config.s
 const WORKFLOW_CONFIG  = "/tmp/pf-cfg.json";
 if (!existsSync(WORKFLOW_CONFIG)) {
   symlinkSync(REAL_CONFIG_PATH, WORKFLOW_CONFIG);
+}
+
+// Read backendApiUrl from the CRE config so the run-stream handler can poll
+// the correct backend (Railway or localhost) for execution status.
+export function getCreBackendUrl() {
+  try {
+    const cfg = JSON.parse(readFileSync(REAL_CONFIG_PATH, "utf8"));
+    return cfg.backendApiUrl || null;
+  } catch {
+    return null;
+  }
 }
 
 /**

@@ -62,6 +62,7 @@ interface Employee {
   preferredAsset: string;
   preferredChainId?: number;
   settleAddress: string;
+  solanaAddress?: string | null;
   salaryAmount: number;
   worldIdVerified?: boolean;
   splits?: PayrollSplit[];
@@ -270,7 +271,10 @@ export function PayrollTable({ employees, companyId, onAddEmployee, onEmployeeRe
                     </td>
                   </tr>
                   {hasSplits && emp.splits!.map((split, i) => {
-                    const addr = split.settleAddress || emp.settleAddress;
+                    const isSol = split.asset.toLowerCase() === "sol";
+                    const addr = isSol
+                      ? (emp.solanaAddress || null)
+                      : (split.settleAddress || emp.settleAddress);
                     return (
                     <tr key={`${emp.id}-split-${i}`} className={`bg-white/[0.015] ${i === emp.splits!.length - 1 ? "border-b border-line" : ""}`}>
                       <td className="py-1.5 px-4 pl-8">
@@ -284,7 +288,14 @@ export function PayrollTable({ employees, companyId, onAddEmployee, onEmployeeRe
                         </span>
                       </td>
                       <td className="py-1.5 px-4">
-                        <NetworkBadge chainId={split.chain_id} />
+                        {isSol ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <Image src="/token-sol.svg" alt="Solana" width={14} height={14} className="rounded-full" />
+                            <span className="font-mono text-xs text-muted">Solana</span>
+                          </span>
+                        ) : (
+                          <NetworkBadge chainId={split.chain_id} />
+                        )}
                       </td>
                       <td className="py-1.5 px-4">
                         <span className="font-mono text-xs text-muted">
@@ -292,11 +303,17 @@ export function PayrollTable({ employees, companyId, onAddEmployee, onEmployeeRe
                         </span>
                       </td>
                       <td className="py-1.5 px-4 whitespace-nowrap">
-                        <code className="font-mono text-[10px] text-muted">
-                          {addr.slice(0, 8)}…{addr.slice(-6)}
-                        </code>
-                        {!split.settleAddress && (
-                          <span className="font-mono text-[9px] text-faint ml-1">(main)</span>
+                        {addr ? (
+                          <>
+                            <code className="font-mono text-[10px] text-muted">
+                              {addr.slice(0, 8)}…{addr.slice(-6)}
+                            </code>
+                            {!isSol && !split.settleAddress && (
+                              <span className="font-mono text-[9px] text-faint ml-1">(main)</span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-faint">—</span>
                         )}
                       </td>
                       <td className="py-1.5 px-4" />

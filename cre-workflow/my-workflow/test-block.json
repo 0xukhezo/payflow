@@ -6,30 +6,36 @@
     {
       "id": "05f0d64d-ddac-46b1-9a62-eb005bce5aaa",
       "name": "Alvaro Teran",
-      "salaryUsdc": 2,
+      "salaryUsdc": 10,
       "settleAddress": "0xCebc0f8aA0cB3D4b7D5CaBF5C2f15956e882bDb6",
-      "solanaAddress": null,
+      "solanaAddress": "Fcy2yTbdKPREQXH6yqfRioropPofFvDtCVQpe98CZLuM",
       "preferredAsset": "usdc",
       "preferredChainId": 42161,
       "worldIdVerified": true,
       "splits": [
         {
-          "percent": 50,
+          "percent": 15,
           "asset": "eth",
           "chain_id": 42161,
           "settleAddress": null
         },
         {
-          "percent": 25,
+          "percent": 15,
           "asset": "eth",
           "chain_id": 8453,
           "settleAddress": "0xb8D5233B25d95B2749b137B665D8891941AC2301"
         },
         {
-          "percent": 25,
+          "percent": 18,
           "asset": "usdc",
           "chain_id": 8453,
           "settleAddress": "0xb8D5233B25d95B2749b137B665D8891941AC2301"
+        },
+        {
+          "percent": 52,
+          "asset": "sol",
+          "chain_id": 1399811149,
+          "settleAddress": null
         }
       ]
     }

@@ -9,6 +9,7 @@ export const NETWORKS = {
       chainId: 11155111,
       name: "Sepolia",
       rpcUrl: process.env.SEPOLIA_RPC_URL || "https://rpc.sepolia.org",
+      fallbackRpcUrls: ["https://ethereum-sepolia-rpc.publicnode.com", "https://sepolia.gateway.tenderly.co"],
       explorer: "https://sepolia.etherscan.io",
       tokens: {
         usdc: { address: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238", decimals: 6,  symbol: "USDC" },
@@ -37,6 +38,7 @@ export const NETWORKS = {
       chainId: 42161,
       name: "Arbitrum",
       rpcUrl: process.env.ARBITRUM_RPC_URL || "https://arb1.arbitrum.io/rpc",
+      fallbackRpcUrls: ["https://arbitrum-one-rpc.publicnode.com", "https://arbitrum.gateway.tenderly.co"],
       explorer: "https://arbiscan.io",
       tokens: {
         usdc: { address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", decimals: 6,  symbol: "USDC" },
@@ -52,6 +54,7 @@ export const NETWORKS = {
       chainId: 8453,
       name: "Base",
       rpcUrl: process.env.BASE_RPC_URL || "https://mainnet.base.org",
+      fallbackRpcUrls: ["https://base-rpc.publicnode.com", "https://base.gateway.tenderly.co"],
       explorer: "https://basescan.org",
       tokens: {
         usdc: { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", decimals: 6,  symbol: "USDC" },

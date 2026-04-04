@@ -166,7 +166,7 @@ export async function runPayroll(company, onProgress = () => {}, networkMode = "
         ? `${assetLabel} pull failed — insufficient treasury balance`
         : raw.includes("allowance") || raw.includes("approve")
         ? `${assetLabel} pull failed — spending not approved`
-        : `${assetLabel} pull failed after ${MAX_PULL_ATTEMPTS} attempts`;
+        : `${assetLabel} pull failed — ${lastErr.reason || lastErr.message || "unknown error"}`;
       onProgress({ id: "treasury", label, status: "error" });
       throw lastErr;
     }

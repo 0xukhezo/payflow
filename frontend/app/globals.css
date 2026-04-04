@@ -98,6 +98,7 @@ input:focus {
 @keyframes fadeUp   { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes pulseDot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.7); } }
 @keyframes blink    { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes barGrow  { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 
 /* ─── Utilities ──────────────────────────────────────────────── */
 @utility section-label {
