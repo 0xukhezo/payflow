@@ -130,6 +130,7 @@ export async function createOrder(quote, settleAddress) {
   const body = {
     quoteId:       quote.quoteId,
     settleAddress,
+    affiliateId: "kn1sFE6EC",
   };
 
   const data = await apiFetch("/shifts/fixed", {
