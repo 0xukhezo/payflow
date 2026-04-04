@@ -117,3 +117,72 @@ cre workflow simulate ./my-workflow --config /tmp/pf-cfg.json
 ```
 
 **Suggested fix:** Either remove the path length limit, or emit a clear diagnostic when it is exceeded.
+
+---
+
+## Issue 5 — EVM log trigger implementation: undocumented topic format and indexed-param decoding
+
+**Description:**
+The documentation for `evmClient.logTrigger()` does not explain how to compute the event signature (topic[0]) or how to decode indexed Solidity parameters from `EVMLog.topics`. Developers have to reverse-engineer both from the SDK types and Ethereum ABI encoding rules.
+
+**Topic[0] — event signature hash:**
+The `topics` filter expects `keccak256` of the canonical event signature string (no parameter names, no spaces). This must be computed externally — the SDK provides no helper:
+
+```typescript
+// keccak256("PayrollRequested(address,uint256,address)")
+const PAYROLL_REQUESTED_SIG =
+  "0xfd3213d1adcbd44eef9d66010322a853c57000751ed8f7098189b1f96ac4dbcd";
+
+const logTrigger = evmClient.logTrigger({
+  addresses: [config.triggerContractAddress as `0x${string}`],
+  topics: [{ values: [PAYROLL_REQUESTED_SIG] }],
+});
+```
+
+**Decoding indexed parameters from `EVMLog.topics`:**
+Each indexed parameter occupies one 32-byte topic slot (topics[0] = sig, topics[1] = first indexed param, …).
+- `indexed address` — left-padded to 32 bytes → extract with `.slice(12)`:
+  ```typescript
+  const treasury = "0x" + Array.from(log.topics[1].slice(12))
+    .map((b: number) => b.toString(16).padStart(2, "0")).join("");
+  ```
+- `indexed uint256` — full 32-byte big-endian → decode with the SDK's `bytesToBigint`:
+  ```typescript
+  const depositChainId = Number(bytesToBigint(log.topics[2]));
+  ```
+
+Non-indexed parameters land in `log.data` as ABI-encoded bytes and require manual decoding.
+
+**Observed:** Zero documentation on topic structure, event sig format, or how to use `bytesToBigint`/`slice` for topic decoding. The `EVMLog` type exposes raw `Uint8Array[]` topics with no helper methods.
+**Expected:** A short guide (or code snippet) in the EVM log trigger docs showing: (a) how to compute the sig hash, (b) how to decode `address`, `uint256`, and `bytes32` from topics.
+**Suggested fix:** Add a "Decoding the event payload" section to the EVM log trigger guide with canonical examples for each Solidity type. Alternatively, expose a `decodeTopics(abi, log)` helper in the SDK — similar to viem's `decodeEventLog`.
+
+---
+
+## Issue 6 — `logTrigger` cannot coexist with `httpTrigger` in local simulation even in separate `initWorkflow` branches
+
+**Description:**
+Attempting to deploy to the DON requires `logTrigger` in `initWorkflow`. But any build of the workflow that contains a call to `evmClient.logTrigger()` — even inside a dead code branch — crashes `cre workflow simulate` during the subscribe phase (see Issue 1). This forces developers to maintain two separate workflow builds: one for simulation (HTTP only) and one for DON deployment (EVM log trigger).
+
+**Workaround:** Use a build-time environment variable or a separate entrypoint to strip the log trigger before running simulation:
+
+```typescript
+// main.ts (DON deployment — enableLogTrigger always true in config.staging.json)
+const initWorkflow = (config: Config) => {
+  if (config.enableLogTrigger) {
+    const evmClient = new cre.capabilities.EVMClient(SEPOLIA);
+    const logTrigger = evmClient.logTrigger({
+      addresses: [config.triggerContractAddress as `0x${string}`],
+      topics: [{ values: [PAYROLL_REQUESTED_SIG] }],
+    });
+    return [cre.handler(logTrigger, onLogTrigger)];
+  }
+  const http = new cre.capabilities.HTTPCapability();
+  return [cre.handler(http.trigger({}), onHttpTrigger)];
+};
+```
+
+For local simulation, set `enableLogTrigger: false` in config **and** ensure your build tooling tree-shakes the log trigger branch — otherwise the WASM binary will still include the dead `logTrigger` call and crash.
+
+**Expected:** `cre workflow simulate` should skip trigger registration for trigger types it does not support (e.g. EVM log) and fall through to the next handler, or at minimum fail gracefully with a message like "EVM log triggers are not supported in simulation mode."
+**Suggested fix:** Detect unsupported trigger types at the subscribe phase and emit a clear warning/skip rather than an unrecoverable crash.
