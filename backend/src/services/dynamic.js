@@ -63,6 +63,9 @@ function getRelayerSigner(chainId) {
  */
 export async function pullFromTreasury(asset, companyAddress, amount, chainId = 11155111) {
   const signer   = getRelayerSigner(chainId);
+  // Reset nonce before every pull — uniswap.js uses a separate wallet cache that
+  // increments the on-chain nonce independently, leaving the NonceManager stale.
+  await signer.reset();
   const net      = getNetwork(chainId);
   const token    = getToken(asset, chainId);
   const contract = new ethers.Contract(token.address, ERC20_ABI, signer);
