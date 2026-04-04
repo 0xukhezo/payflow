@@ -25,6 +25,7 @@ Next.js 16 app with two portals: a company dashboard for running payroll and an 
 
 ### Employee Portal (`/employee`)
 
+- **Join requests** — search for a company by name and submit a join request; the company owner reviews and accepts it from their dashboard
 - **Payout splits** — configure multiple splits (token + chain + percentage). Splits must sum to 100%.
 - **SOL support** — selecting SOL auto-sets chain to Solana and shows a Solana address input
 - **World ID verification** — IDKit v4 widget, proof sent to backend for server-side validation
@@ -71,6 +72,7 @@ const { walletProvider } = useAppKitProvider("eip155");
 | `PayrollTable`     | Employee list with salary amounts and World ID status badges |
 | `SalaryHistory`    | Payment history table with attestation badges and tx links   |
 | `AssetSelector`    | Dropdown for selecting preferred token (including SOL)       |
+| `NetworkSelector`  | Dropdown for selecting the settlement network                |
 | `AttestationBadge` | Shows Chainlink oracle deviation % and PASS/FAIL             |
 | `WorldIdBadge`     | Shows World ID verification status                           |
 | `AppNav`           | Navigation bar with network mode toggle                      |
@@ -87,6 +89,8 @@ Create `frontend/.env.local`:
 ```env
 NEXT_PUBLIC_REOWN_PROJECT_ID=    # from https://cloud.reown.com
 NEXT_PUBLIC_API_URL=http://localhost:3001   # backend URL
+NEXT_PUBLIC_WORLD_APP_ID=        # app_xxxx from developer.world.org
+NEXT_PUBLIC_WORLD_ACTION=        # action string (e.g. "verify-employee")
 ```
 
 ---
@@ -124,7 +128,7 @@ The backend must be deployed separately (Railway, Render, or similar) before the
 | ---------------- | -------- | -------------------------------------- |
 | Arbitrum         | 42161    | Company treasury, employee EVM payouts |
 | Base             | 8453     | Employee EVM payouts                   |
-| Ethereum Sepolia | 11155111 | Testnet / ENS resolution               |
+| Ethereum Sepolia | 11155111 | Testnet                                |
 | Solana           | —        | Employee SOL payouts (via SideShift)   |
 
 ---
@@ -139,6 +143,6 @@ The backend must be deployed separately (Railway, Render, or similar) before the
 | `@reown/appkit-adapter-wagmi` | latest  | EVM wallet connectors                 |
 | `@worldcoin/idkit`            | ^4.0    | World ID v4 verification widget       |
 | `viem`                        | latest  | Typed contract calls for USDC approve |
-| `ethers`                      | ^6.16   | ABI encoding, ENS resolution          |
+| `ethers`                      | ^6.16   | BrowserProvider, tx signing           |
 | `tailwindcss`                 | ^4      | Styling                               |
 | `lucide-react`                | ^0.577  | Icons                                 |

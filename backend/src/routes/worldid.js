@@ -36,6 +36,25 @@ router.post("/verify", async (req, res) => {
     // Extract nullifier to prevent replay attacks (v4 uses responses[].nullifier)
     const nullifier = idkitResponse?.responses?.[0]?.nullifier ?? null;
 
+    // Ensure this World ID hasn't already been used by another employee
+    if (nullifier) {
+      const { data: existingEmployee } = await supabase
+        .from("employees")
+        .select("id")
+        .eq("nullifier_hash", nullifier)
+        .maybeSingle();
+
+      const { data: existingVerification } = await supabase
+        .from("world_id_verifications")
+        .select("address")
+        .eq("nullifier_hash", nullifier)
+        .maybeSingle();
+
+      if (existingEmployee || existingVerification) {
+        return res.status(400).json({ error: "This World ID is already registered to another account" });
+      }
+    }
+
     if (employeeId && companyId) {
       // Employee already on payroll — update record directly
       const { error: dbErr } = await supabase
