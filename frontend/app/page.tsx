@@ -34,9 +34,15 @@ export default function Home() {
 
         <div className="relative max-w-7xl mx-auto px-8 pt-28 pb-24">
           {/* Status pill */}
-          <div className="fade-up fade-up-1 flex items-center gap-2 mb-10 font-mono text-xs tracking-looser">
-            <span className="pulse-dot inline-block w-1.5 h-1.5 rounded-full bg-teal" />
-            <span className="text-teal">POWERED BY CHAINLINK CRE</span>
+          <div className="fade-up fade-up-1 flex items-center gap-3 mb-10 font-mono text-xs tracking-looser flex-wrap">
+            <span className="text-white">Powered by</span>
+            <span className="text-blue-500">CHAINLINK CRE</span>{" "}
+            <span className="text-white">-</span>
+            <span className="text-pink-500">UNISWAP</span>
+            <span className="text-white">-</span>
+            <span className="text-gray-400">WORLD ID</span>
+            <span className="text-white">-</span>
+            <span className="text-white">REOWN</span>
           </div>
 
           {/* Headline */}
@@ -49,9 +55,9 @@ export default function Home() {
           {/* Subhead */}
           <p className="fade-up fade-up-3 max-w-2xl text-lg leading-relaxed mb-12 text-muted font-ui">
             Companies fund a single treasury. Every developer, freelancer, and
-            DAO contributor receives the exact asset they chose — ETH, WBTC, or SOL.
-            Every conversion verified by the Chainlink DON against live oracle data
-            and attested on-chain, forever.
+            DAO contributor receives the exact asset they chose — ETH, WBTC, or
+            SOL. Every conversion verified by the Chainlink DON against live
+            oracle data and attested on-chain, forever.
           </p>
           <HeroCTAs />
         </div>
@@ -80,7 +86,9 @@ export default function Home() {
       <section className=" bg-surface">
         <div className="max-w-7xl mx-auto px-8 py-16 grid md:grid-cols-2 gap-16 items-center">
           <div>
-            <div className="section-label mb-4">Chainlink CRE Rate Attestation</div>
+            <div className="section-label mb-4">
+              Chainlink CRE Rate Attestation
+            </div>
             <h2 className="text-4xl font-bold mb-5 font-heading text-ink">
               Every rate verified.
               <br />
@@ -110,13 +118,13 @@ export default function Home() {
             </div>
             <div className="p-5 space-y-2 text-muted">
               {[
-                ["employeeId",    "emp-001",         "text-ink"],
-                ["settleAsset",   "WETH",             "text-gold"],
-                ["settleAmount",  "0.00732",          "text-gold"],
-                ["oraclePrice",   "$2048.32",         "text-teal"],
-                ["deviationBps",  "12",               "text-teal"],
-                ["toleranceBps",  "8000",             "text-ink"],
-                ["withinRange",   "true",             "text-teal"],
+                ["employeeId", "emp-001", "text-ink"],
+                ["settleAsset", "WETH", "text-gold"],
+                ["settleAmount", "0.00732", "text-gold"],
+                ["oraclePrice", "$2048.32", "text-teal"],
+                ["deviationBps", "12", "text-teal"],
+                ["toleranceBps", "8000", "text-ink"],
+                ["withinRange", "true", "text-teal"],
               ].map(([k, v, c]) => (
                 <div key={k} className="flex gap-4">
                   <span className="text-violet w-32 shrink-0">{k}</span>
@@ -125,7 +133,10 @@ export default function Home() {
               ))}
               <div className="mt-4 pt-4 border-t border-line">
                 <span className="text-teal">✓ queued</span>
-                <span className="text-faint"> · CRE consensus passed · dispatch authorized</span>
+                <span className="text-faint">
+                  {" "}
+                  · CRE consensus passed · dispatch authorized
+                </span>
               </div>
             </div>
           </div>
