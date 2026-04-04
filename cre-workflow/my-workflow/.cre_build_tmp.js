@@ -15152,7 +15152,7 @@ var onHttpTrigger = (runtime2, payload) => {
     throw new Error("No employees provided in request body");
   runtime2.log("╔══════════════════════════════════════════════════════════════════╗");
   runtime2.log("║         PayFlow · Chainlink CRE Payroll Workflow                ║");
-  runtime2.log("║   Uniswap Trading API · Chainlink Data Feeds · World ID         ║");
+  runtime2.log("║   Uniswap Trading API · Chainlink Data Feeds                    ║");
   runtime2.log("╚══════════════════════════════════════════════════════════════════╝");
   runtime2.log(`[PayFlow] Network:        ${runtime2.config.networkLabel}`);
   runtime2.log(`[PayFlow] Company:        ${body.companyId}`);
@@ -15162,7 +15162,6 @@ var onHttpTrigger = (runtime2, payload) => {
   const depositChainId = body.depositChainId ? body.depositChainId : 11155111;
   const paymentUnits = expandToPaymentUnits(body.employees, depositChainId);
   const totalUsdc = body.employees.reduce((s, e) => s + e.salaryUsdc, 0);
-  runtime2.log(`[PayFlow] Eligible:       ${eligible.length} employee(s) → ${paymentUnits.length} payment unit(s) (total ${totalUsdc} USDC)`);
   const http = new cre.capabilities.HTTPClient;
   runtime2.log(`
 ┌─ Step 1 · Chainlink Data Feeds (http-actions → Sepolia AggregatorV3) ─┐`);
@@ -15190,7 +15189,7 @@ var onHttpTrigger = (runtime2, payload) => {
   let backendQuotes = [];
   if (runtime2.config.backendApiUrl) {
     const quotesBody = JSON.stringify({
-      employees: eligible,
+      employees: body.employees,
       depositChainId,
       treasury: body.treasury
     });
@@ -15222,7 +15221,6 @@ var onHttpTrigger = (runtime2, payload) => {
     const splitLabel = emp._splitLabel ? ` (${emp._splitLabel})` : "";
     runtime2.log(`│`);
     runtime2.log(`│  ▸ ${emp.name}${splitLabel}  (${emp.salaryUsdc} USDC → ${asset}@${settleChainId})`);
-    runtime2.log(`│    World ID:    ✓ Verified`);
     runtime2.log(`│    Oracle:      $${oraclePrice.toFixed(2)} / ${asset} (Chainlink)`);
     const isSol = asset === "SOL";
     let settleAmount;
@@ -15344,7 +15342,7 @@ var onHttpTrigger = (runtime2, payload) => {
   }
   runtime2.log(`
 ╔══════════════════════════════════════════════════════════════════╗`);
-  runtime2.log(`║  ${queued.length} queued  ·  ${failed.length} failed  ·  ${skipped.length} skipped (unverified)  ·  ${totalUsdc} USDC  ║`);
+  runtime2.log(`║  ${queued.length} queued  ·  ${failed.length} failed  ·  ${totalUsdc} USDC                         ║`);
   runtime2.log(`║  ${runtime2.now().toISOString()}                      ║`);
   runtime2.log("╚══════════════════════════════════════════════════════════════════╝");
   return JSON.stringify({
@@ -15355,7 +15353,6 @@ var onHttpTrigger = (runtime2, payload) => {
       totalUsdc,
       queued: queued.length,
       failed: failed.length,
-      skipped: skipped.length,
       timestamp: runtime2.now().toISOString()
     },
     oracles: {
@@ -15365,12 +15362,7 @@ var onHttpTrigger = (runtime2, payload) => {
       pegDeviationBps: 0,
       pegPass: true
     },
-    results,
-    skipped: skipped.map((e) => ({
-      employeeId: e.id,
-      employeeName: e.name,
-      reason: "World ID verification required"
-    }))
+    results
   });
 };
 function stringToBytes(s) {

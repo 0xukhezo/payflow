@@ -203,6 +203,56 @@ curl -X POST https://trade-api.gateway.uniswap.org/v1/quote \
 
 ---
 
+## Issue 6 — Quote TTL (30s) too short for server-side relayer execution flow
+
+**Description:**
+The quote from `/v1/quote` expires ~30 seconds after issuance. A server-side relayer must: fetch the quote → pull funds from treasury → submit ERC20 approval tx → wait for confirmation → call `/v1/swap`. On mainnet with any mempool congestion, this regularly exceeds the 30s window. The API returns an expiry error at `/v1/swap` time, requiring the entire flow to restart with a fresh quote (which may have moved in price).
+
+**Reproduce:**
+
+```bash
+# Step 1: fetch a quote for USDC → WETH on Arbitrum
+curl -X POST https://trade-api.gateway.uniswap.org/v1/quote \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: YOUR_KEY" \
+  -d '{
+    "type": "EXACT_INPUT",
+    "amount": "20000000",
+    "tokenInChainId": 42161,
+    "tokenOutChainId": 42161,
+    "tokenIn": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    "tokenOut": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+    "swapper": "0xYOUR_RELAYER_ADDRESS",
+    "routingPreference": "BEST_PRICE"
+  }'
+
+# Step 2: simulate a real relayer flow with the required on-chain steps, then call /swap
+# The approval tx alone takes 15–25s to confirm on Arbitrum under moderate load.
+# By the time /v1/swap is called, the quote is expired.
+```
+
+**Observed execution timeline (mainnet, moderate activity):**
+
+```
+t=0s    POST /v1/quote                        → quote issued (TTL ~30s)
+t=2s    treasury USDC transfer tx submitted
+t=9s    treasury transfer confirmed           → funds in relayer
+t=10s   ERC20.approve(Permit2) submitted
+t=28s   approval confirmed                    → approved
+t=29s   POST /v1/swap                         → ❌ quote expired
+```
+
+**Tokens used:**
+
+- `tokenIn` — USDC on Arbitrum (`0xaf88d065e77c8cC2239327C5EDb3A432268e5831`)
+- `tokenOut` — WETH on Arbitrum (`0x82aF49447D8a07e3bd95BD0d56f35241523fBab1`)
+
+**Suggested fix:** One of:
+
+- Expose a `POST /v1/quote/refresh` endpoint that extends an existing quote's TTL without repricing
+- Increase TTL to 60–90s for server-authenticated (API key) callers
+- Add `"quotedAt"` and `"expiresAt"` timestamps to the quote response so callers know exactly how much time remains before starting execution
+
 ## Issue 7 — Cross-chain routes return 404 "No quotes available" below an undocumented minimum trade size
 
 **Description:**
@@ -258,58 +308,9 @@ curl -X POST https://trade-api.gateway.uniswap.org/v1/quote \
 **Impact:** In a payroll system where an employee's salary is split across multiple chains, small per-split amounts routinely fall below the threshold. The generic 404 is indistinguishable from a "pair not supported" error, causing callers to waste time investigating route configuration rather than diagnosing a size constraint.
 
 **Suggested fix:** One of:
+
 - Return a distinct `errorCode` such as `"AMOUNT_BELOW_MINIMUM"` when the input is too small for bridge routing
 - Include a `"minAmount"` field in the 404 response body
 - Document the minimum cross-chain trade size per chain pair in the API reference
 
 ---
-
-## Issue 6 — Quote TTL (30s) too short for server-side relayer execution flow
-
-**Description:**
-The quote from `/v1/quote` expires ~30 seconds after issuance. A server-side relayer must: fetch the quote → pull funds from treasury → submit ERC20 approval tx → wait for confirmation → call `/v1/swap`. On mainnet with any mempool congestion, this regularly exceeds the 30s window. The API returns an expiry error at `/v1/swap` time, requiring the entire flow to restart with a fresh quote (which may have moved in price).
-
-**Reproduce:**
-
-```bash
-# Step 1: fetch a quote for USDC → WETH on Arbitrum
-curl -X POST https://trade-api.gateway.uniswap.org/v1/quote \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: YOUR_KEY" \
-  -d '{
-    "type": "EXACT_INPUT",
-    "amount": "20000000",
-    "tokenInChainId": 42161,
-    "tokenOutChainId": 42161,
-    "tokenIn": "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
-    "tokenOut": "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
-    "swapper": "0xYOUR_RELAYER_ADDRESS",
-    "routingPreference": "BEST_PRICE"
-  }'
-
-# Step 2: simulate a real relayer flow with the required on-chain steps, then call /swap
-# The approval tx alone takes 15–25s to confirm on Arbitrum under moderate load.
-# By the time /v1/swap is called, the quote is expired.
-```
-
-**Observed execution timeline (mainnet, moderate activity):**
-
-```
-t=0s    POST /v1/quote                        → quote issued (TTL ~30s)
-t=2s    treasury USDC transfer tx submitted
-t=9s    treasury transfer confirmed           → funds in relayer
-t=10s   ERC20.approve(Permit2) submitted
-t=28s   approval confirmed                    → approved
-t=29s   POST /v1/swap                         → ❌ quote expired
-```
-
-**Tokens used:**
-
-- `tokenIn` — USDC on Arbitrum (`0xaf88d065e77c8cC2239327C5EDb3A432268e5831`)
-- `tokenOut` — WETH on Arbitrum (`0x82aF49447D8a07e3bd95BD0d56f35241523fBab1`)
-
-**Suggested fix:** One of:
-
-- Expose a `POST /v1/quote/refresh` endpoint that extends an existing quote's TTL without repricing
-- Increase TTL to 60–90s for server-authenticated (API key) callers
-- Add `"quotedAt"` and `"expiresAt"` timestamps to the quote response so callers know exactly how much time remains before starting execution

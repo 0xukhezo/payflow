@@ -114,6 +114,13 @@ export default function CompanyPage() {
     settleAddress: "",
     salaryAmount: "",
   });
+
+  // Keep onboardChainId and empForm.preferredChainId in sync when the user
+  // switches network mode (testnet ↔ mainnet) after the page has already mounted.
+  useEffect(() => {
+    setOnboardChainId(defaultNetwork.chainId);
+    setEmpForm((f) => ({ ...f, preferredChainId: defaultNetwork.chainId }));
+  }, [defaultNetwork.chainId]);
   const [empError, setEmpError] = useState<string | null>(null);
   const [empLoading, setEmpLoading] = useState(false);
   const pollingRef      = useRef<ReturnType<typeof setInterval> | null>(null);

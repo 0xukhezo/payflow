@@ -205,14 +205,6 @@ async function getQuoteTwoHop(depositCoin, depositChainId, settleCoin, settleCha
 }
 
 /**
- * Execute a Uniswap swap.
- * 1. Ensure Permit2 approval for input token on source chain
- * 2. Sign Permit2 permit if required
- * 3. Get calldata from /v1/swap
- * 4. Broadcast on source chain
- * 5. Transfer output tokens to employee (same-chain only — cross-chain delivery is automatic)
- */
-/**
  * Execute a UniswapX cross-chain order.
  * Signs the order and submits to the UniswapX order service (no on-chain tx from relayer).
  */
@@ -234,7 +226,6 @@ async function executeUniswapXOrder(quote) {
   });
   const swapData = await swapRes.json();
   if (!swapRes.ok) throw new Error(`UniswapX order build error ${swapRes.status}: ${JSON.stringify(swapData)}`);
-
 
   // New Trading API format: signature is returned by the API directly (server-side signing).
   // Old format: permitData is returned and we must sign it ourselves.
@@ -346,12 +337,9 @@ async function executeTwoHopSwap(quote, settleAddress) {
   await new Promise((r) => setTimeout(r, 5_000));
   const destToken    = new ethers.Contract(destUsdcAddr, ERC20_ABI, destWallet);
   const balanceBefore = await destToken.balanceOf(destWallet.address);
-  console.log(`[TwoHop] Relayer USDC on Base before bridge: ${balanceBefore}`);
+  console.log(`[TwoHop] Relayer USDC on ${getNetwork(destChainId).name} before bridge: ${balanceBefore}`);
 
-  const bridgeResult = await executeUniswapXOrder(
-    { ...quote, isTwoHop: false },
-    settleAddress,
-  );
+  const bridgeResult = await executeUniswapXOrder({ ...quote, isTwoHop: false });
 
   // Store params needed to re-quote at execution time (original quote will be stale by then)
   pendingSecondHops.set(bridgeResult.id, {
@@ -402,7 +390,6 @@ function scheduleBridgePoll(orderId) {
           // Re-quote with actual received amount, capped at this employee's expected share.
           // Multiple bridges can arrive in the same poll tick — without the cap the first
           // second-hop would consume all accumulated USDC, leaving nothing for the others.
-          const received      = balanceNow - hop.balanceBefore;
           const toSwap        = received > hop.expectedUnits ? hop.expectedUnits : received;
           const receivedHuman = Number(toSwap) / 1_000_000; // USDC has 6 decimals
           const freshQuote = await getQuote(hop.depositCoin, hop.destChainId, hop.settleCoin, hop.destChainId, receivedHuman);

@@ -236,7 +236,7 @@ const onHttpTrigger = (
     "║         PayFlow · Chainlink CRE Payroll Workflow                ║",
   );
   runtime.log(
-    "║   Uniswap Trading API · Chainlink Data Feeds · World ID         ║",
+    "║   Uniswap Trading API · Chainlink Data Feeds                    ║",
   );
   runtime.log(
     "╚══════════════════════════════════════════════════════════════════╝",
@@ -254,10 +254,6 @@ const onHttpTrigger = (
   // Expand splits → payment units (mirrors backend expandToPaymentUnits)
   const paymentUnits = expandToPaymentUnits(body.employees, depositChainId);
   const totalUsdc = body.employees.reduce((s, e) => s + e.salaryUsdc, 0);
-
-  runtime.log(
-    `[PayFlow] Eligible:       ${eligible.length} employee(s) → ${paymentUnits.length} payment unit(s) (total ${totalUsdc} USDC)`,
-  );
 
   const http = new cre.capabilities.HTTPClient();
 
@@ -326,7 +322,7 @@ const onHttpTrigger = (
   let backendQuotes: BackendQuote[] = [];
   if (runtime.config.backendApiUrl) {
     const quotesBody = JSON.stringify({
-      employees: eligible,
+      employees: body.employees,
       depositChainId,
       treasury: body.treasury,
     });
@@ -373,7 +369,6 @@ const onHttpTrigger = (
     runtime.log(
       `│  ▸ ${emp.name}${splitLabel}  (${emp.salaryUsdc} USDC → ${asset}@${settleChainId})`,
     );
-    runtime.log(`│    World ID:    ✓ Verified`);
     runtime.log(
       `│    Oracle:      $${oraclePrice.toFixed(2)} / ${asset} (Chainlink)`,
     );
@@ -578,7 +573,7 @@ const onHttpTrigger = (
     "\n╔══════════════════════════════════════════════════════════════════╗",
   );
   runtime.log(
-    `║  ${queued.length} queued  ·  ${failed.length} failed  ·  ${skipped.length} skipped (unverified)  ·  ${totalUsdc} USDC  ║`,
+    `║  ${queued.length} queued  ·  ${failed.length} failed  ·  ${totalUsdc} USDC                         ║`,
   );
   runtime.log(`║  ${runtime.now().toISOString()}                      ║`);
   runtime.log(
@@ -593,7 +588,6 @@ const onHttpTrigger = (
       totalUsdc,
       queued: queued.length,
       failed: failed.length,
-      skipped: skipped.length,
       timestamp: runtime.now().toISOString(),
     },
     oracles: {
@@ -604,11 +598,6 @@ const onHttpTrigger = (
       pegPass: true,
     },
     results,
-    skipped: skipped.map((e) => ({
-      employeeId: e.id,
-      employeeName: e.name,
-      reason: "World ID verification required",
-    })),
   });
 };
 
