@@ -1128,16 +1128,22 @@ export default function EmployeePage() {
                             />
                             <span className="text-sm text-ink">{symbol}</span>
                             {isSolana ? (
-                              <span className="font-mono text-xs text-muted">· Solana</span>
+                              <span className="font-mono text-xs text-muted">
+                                · Solana
+                              </span>
                             ) : (
                               net && (
-                                <span className="font-mono text-xs text-muted">· {net.shortName}</span>
+                                <span className="font-mono text-xs text-muted">
+                                  · {net.shortName}
+                                </span>
                               )
                             )}
                             {(() => {
                               const addr = isSolana
-                                ? (record.solanaAddress || solanaAddress || null)
-                                : (s.settleAddress || record.settleAddress || null);
+                                ? record.solanaAddress || solanaAddress || null
+                                : s.settleAddress ||
+                                  record.settleAddress ||
+                                  null;
                               return addr ? (
                                 <span className="font-mono text-[10px] text-faint truncate max-w-[180px]">
                                   · {addr.slice(0, 6)}…{addr.slice(-4)}
@@ -1514,7 +1520,7 @@ export default function EmployeePage() {
                     rp_context={rpContext}
                     allow_legacy_proofs={true}
                     preset={orbLegacy()}
-                    environment="staging"
+                    environment={"staging"}
                     handleVerify={handleVerify}
                     onSuccess={handleWorldIdSuccess}
                   />

@@ -15028,6 +15028,7 @@ var sendErrorResponse = (error) => {
   hostBindings.sendResponse(payload);
 };
 var LATEST_ROUND_DATA = "0xfeaf968c";
+var PAYROLL_REQUESTED_SIG = "0xfd3213d1adcbd44eef9d66010322a853c57000751ed8f7098189b1f96ac4dbcd";
 var SEPOLIA = ClientCapability.SUPPORTED_CHAIN_SELECTORS["ethereum-testnet-sepolia"];
 function decodePrice(data) {
   const raw = bytesToBigint(data.slice(32, 64));
@@ -15379,7 +15380,52 @@ var onHttpTrigger = (runtime2, payload) => {
     }))
   });
 };
-var initWorkflow = (_config) => {
+function stringToBytes(s) {
+  const out = new Uint8Array(s.length);
+  for (let i2 = 0;i2 < s.length; i2++)
+    out[i2] = s.charCodeAt(i2) & 255;
+  return out;
+}
+var onLogTrigger = (runtime2, log) => {
+  const treasury = "0x" + Array.from(log.topics[1].slice(12)).map(function(b) {
+    return b.toString(16).padStart(2, "0");
+  }).join("");
+  const depositChainId = Number(bytesToBigint(log.topics[2]));
+  runtime2.log("╔══════════════════════════════════════════════════════════════════╗");
+  runtime2.log("║    PayFlow · CRE Payroll Workflow  [ON-CHAIN LOG TRIGGER]       ║");
+  runtime2.log("╚══════════════════════════════════════════════════════════════════╝");
+  runtime2.log("[PayFlow] PayrollRequested event detected");
+  runtime2.log("[PayFlow] Treasury:      " + treasury);
+  runtime2.log("[PayFlow] Deposit chain: " + depositChainId);
+  const http = new cre.capabilities.HTTPClient;
+  const url = runtime2.config.backendApiUrl + "/api/company/by-treasury/" + treasury + "/cre-payload";
+  runtime2.log("[PayFlow] Fetching payload: " + url);
+  const resp = http.sendRequest(runtime2, {
+    url,
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+    body: base64Encode("")
+  }).result();
+  if (resp.statusCode !== 200) {
+    throw new Error("Failed to fetch company payload: HTTP " + resp.statusCode);
+  }
+  const body = JSON.parse(bytesToString(resp.body));
+  runtime2.log("[PayFlow] Company:  " + body.companyId);
+  runtime2.log("[PayFlow] Roster:   " + body.employees.length + " employee(s)");
+  const fakePayload = {
+    input: stringToBytes(JSON.stringify(body))
+  };
+  return onHttpTrigger(runtime2, fakePayload);
+};
+var initWorkflow = (config) => {
+  if (config.enableLogTrigger) {
+    const evmClient = new cre.capabilities.EVMClient(ClientCapability.SUPPORTED_CHAIN_SELECTORS["ethereum-testnet-sepolia"]);
+    const logTrigger = evmClient.logTrigger({
+      addresses: [config.triggerContractAddress],
+      topics: [{ values: [PAYROLL_REQUESTED_SIG] }]
+    });
+    return [cre.handler(logTrigger, onLogTrigger)];
+  }
   const http = new cre.capabilities.HTTPCapability;
   return [cre.handler(http.trigger({}), onHttpTrigger)];
 };

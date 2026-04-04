@@ -1,29 +1,30 @@
-import { Router } from "express";
-import { supabase } from "../db/supabase.js";
+import { Router }              from "express";
+import { supabase }             from "../db/supabase.js";
 import { createRpContext, verifyProof } from "../services/worldid.js";
 
 const router = Router();
 
 // POST /api/worldid/sign-request
-// Frontend calls this to get an RpContext before opening IDKit
+// Returns RP context (sig, nonce, timestamps) for the frontend to open IDKit.
 router.post("/sign-request", (req, res) => {
   try {
     const { action } = req.body;
-    const rpContext = createRpContext(action);
+    const rpContext  = createRpContext(action);
     res.json(rpContext);
   } catch (err) {
-    console.error("World ID sign-request error:", err);
+    console.error("[WorldID] sign-request error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
 // POST /api/worldid/verify
+// Forwards the IDKit result to the Developer Portal and marks the employee as verified.
 router.post("/verify", async (req, res) => {
   try {
-    const { rp_id, idkitResponse, employeeId, companyId } = req.body;
+    const { rp_id, idkitResponse, employeeId, companyId, walletAddress } = req.body;
 
     if (!rp_id || !idkitResponse) {
-      return res.status(400).json({ error: "Missing required fields: rp_id, idkitResponse" });
+      return res.status(400).json({ error: "Missing rp_id or idkitResponse" });
     }
 
     const result = await verifyProof(rp_id, idkitResponse);
@@ -32,44 +33,45 @@ router.post("/verify", async (req, res) => {
       return res.status(400).json({ error: result.error });
     }
 
-    const nullifier = idkitResponse?.responses?.[0]?.nullifier;
+    // Extract nullifier to prevent replay attacks (v4 uses responses[].nullifier)
+    const nullifier = idkitResponse?.responses?.[0]?.nullifier ?? null;
 
     if (employeeId && companyId) {
-      // Employee already on payroll — update their record directly
-      const { error: dbErr } = await supabase.from("employees")
-        .update({ world_id_verified: true, nullifier_hash: nullifier || null })
+      // Employee already on payroll — update record directly
+      const { error: dbErr } = await supabase
+        .from("employees")
+        .update({ world_id_verified: true, nullifier_hash: nullifier })
         .eq("id", employeeId)
         .eq("company_id", companyId);
-      if (dbErr) console.error("World ID DB update failed:", dbErr.message);
-    } else if (req.body.walletAddress) {
-      // Employee not on payroll yet — persist verification by wallet address
-      const { error: dbErr } = await supabase.from("world_id_verifications")
-        .upsert({ address: req.body.walletAddress.toLowerCase(), nullifier_hash: nullifier || null })
-        .eq("address", req.body.walletAddress.toLowerCase());
-      if (dbErr) console.error("World ID pre-verify save failed:", dbErr.message);
+      if (dbErr) console.error("[WorldID] DB update failed:", dbErr.message);
+    } else if (walletAddress) {
+      // Employee not on payroll yet — store by wallet address for later linking
+      const { error: dbErr } = await supabase
+        .from("world_id_verifications")
+        .upsert({ address: walletAddress.toLowerCase(), nullifier_hash: nullifier });
+      if (dbErr) console.error("[WorldID] pre-verify save failed:", dbErr.message);
     }
 
     res.json({ verified: true });
   } catch (err) {
-    console.error("World ID verify error:", err);
+    console.error("[WorldID] verify error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
 // GET /api/worldid/verified/:address
-// Check if a wallet address has a pre-verification record (employee not yet on payroll)
+// Check if a wallet has a pre-verification record (before joining a company).
 router.get("/verified/:address", async (req, res) => {
   try {
-    const address = req.params.address.toLowerCase();
     const { data, error } = await supabase
       .from("world_id_verifications")
       .select("address, nullifier_hash")
-      .eq("address", address)
+      .eq("address", req.params.address.toLowerCase())
       .maybeSingle();
     if (error) throw error;
-    res.json({ verified: !!data, nullifierHash: data?.nullifier_hash || null });
+    res.json({ verified: !!data, nullifierHash: data?.nullifier_hash ?? null });
   } catch (err) {
-    console.error("World ID verified check error:", err);
+    console.error("[WorldID] verified check error:", err.message);
     res.status(500).json({ error: err.message });
   }
 });

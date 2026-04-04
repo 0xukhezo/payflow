@@ -40,6 +40,10 @@ import type {
 // answer is at byte offset 32, scaled by 1e8
 const LATEST_ROUND_DATA = "0xfeaf968c";
 
+// keccak256("PayrollRequested(address,uint256,address)")
+const PAYROLL_REQUESTED_SIG =
+  "0xfd3213d1adcbd44eef9d66010322a853c57000751ed8f7098189b1f96ac4dbcd";
+
 const SEPOLIA = EVMClient.SUPPORTED_CHAIN_SELECTORS["ethereum-testnet-sepolia"];
 
 // ── Utility helpers ───────────────────────────────────────────────────────────
@@ -690,26 +694,23 @@ const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): string => {
 };
 
 // ── Workflow registration ─────────────────────────────────────────────────────
+// When enableLogTrigger is true (deployed DON), the workflow listens for the
+// PayrollRequested EVM event on PayrollTrigger and runs onLogTrigger.
+// When false (local simulation via `cre workflow simulate`), falls back to the
+// HTTP trigger so the workflow can still be tested end-to-end locally.
 
-// ── NOTE FOR DEPLOYMENT ───────────────────────────────────────────────────────
-// The log trigger below cannot be tested with `cre workflow simulate` locally —
-// the CRE runtime only supports log triggers on the deployed DON.
-//
-// TO ENABLE ON DEPLOYED DON: replace initWorkflow with this version:
-//
-//   const initWorkflow = (config: Config): any[] => {
-//     const http = new cre.capabilities.HTTPCapability();
-//     const handlers: any[] = [cre.handler(http.trigger({}), onHttpTrigger)];
-//     const evmClient  = new cre.capabilities.EVMClient(EVMClient.SUPPORTED_CHAIN_SELECTORS["ethereum-testnet-sepolia"]);
-//     const logTrigger = evmClient.logTrigger({
-//       addresses: [config.triggerContractAddress],
-//       topics:    [{ values: [PAYROLL_REQUESTED_SIG] }],
-//     });
-//     handlers.push(cre.handler(logTrigger, onLogTrigger));
-//     return handlers;
-//   };
+const initWorkflow = (config: Config) => {
+  if (config.enableLogTrigger) {
+    const evmClient = new cre.capabilities.EVMClient(
+      EVMClient.SUPPORTED_CHAIN_SELECTORS["ethereum-testnet-sepolia"],
+    );
+    const logTrigger = evmClient.logTrigger({
+      addresses: [config.triggerContractAddress as `0x${string}`],
+      topics: [{ values: [PAYROLL_REQUESTED_SIG] }],
+    });
+    return [cre.handler(logTrigger, onLogTrigger)];
+  }
 
-const initWorkflow = (_config: Config) => {
   const http = new cre.capabilities.HTTPCapability();
   return [cre.handler(http.trigger({}), onHttpTrigger)];
 };

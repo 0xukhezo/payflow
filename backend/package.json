@@ -13,7 +13,7 @@
   "description": "",
   "dependencies": {
     "@supabase/supabase-js": "^2.99.3",
-    "@worldcoin/idkit-server": "^1.0.0",
+    "@worldcoin/idkit-core": "^4.1.0",
     "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "ethers": "^6.16.0",
