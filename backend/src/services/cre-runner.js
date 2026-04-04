@@ -23,7 +23,7 @@ const __dirname  = path.dirname(__filename);
 // Absolute paths
 // CRE CLI must run from the project root (where project.yaml lives)
 const CRE_BIN          = `${process.env.HOME}/.cre/bin/cre`;
-const CRE_PROJECT_DIR  = path.resolve(__dirname, "../../../cre-workflow/my-project");
+const CRE_PROJECT_DIR  = path.resolve(__dirname, "../../../cre-workflow");
 const WORKFLOW_PATH    = "./my-workflow";
 
 // CRE CLI enforces a 97-char max on --config path. The real config path exceeds that,
