@@ -128,7 +128,7 @@ export async function runPayroll(company, onProgress = () => {}, networkMode = "
 
   // --- Pull deposit asset from company treasury ---
   if (company.walletAddress) {
-    const totalAmount = eligible.reduce((sum, e) => sum + (e.salaryAmount || 0), 0);
+    const totalAmount = company.employees.reduce((sum, e) => sum + (e.salaryAmount || 0), 0);
     const assetLabel  = paymentAsset.toUpperCase();
     onProgress({ id: "treasury", label: `Pulling ${totalAmount} ${assetLabel} from treasury...`, status: "running" });
 

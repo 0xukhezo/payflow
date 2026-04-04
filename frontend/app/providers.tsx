@@ -1,6 +1,7 @@
 "use client";
 
 import { createAppKit } from "@reown/appkit/react";
+import { DefaultSIWX } from "@reown/appkit-siwx";
 import { EthersAdapter } from "@reown/appkit-adapter-ethers";
 import { SolanaAdapter } from "@reown/appkit-adapter-solana";
 import { PhantomWalletAdapter, SolflareWalletAdapter } from "@solana/wallet-adapter-wallets";
@@ -31,6 +32,7 @@ createAppKit({
     email: false,
     socials: [],
   },
+  siwx: new DefaultSIWX(),
 });
 
 export function Providers({ children }: { children: React.ReactNode }) {
