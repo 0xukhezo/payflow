@@ -14998,6 +14998,35 @@ class Runner {
     });
   }
 }
+var prepareErrorResponse = (error) => {
+  let errorMessage = null;
+  if (error instanceof Error) {
+    errorMessage = error.message;
+  } else if (typeof error === "string") {
+    errorMessage = error;
+  } else {
+    errorMessage = String(error) || null;
+  }
+  if (typeof errorMessage !== "string") {
+    return null;
+  }
+  const result = create(ExecutionResultSchema, {
+    result: { case: "error", value: errorMessage }
+  });
+  return toBinary(ExecutionResultSchema, result);
+};
+var sendErrorResponse = (error) => {
+  const payload = prepareErrorResponse(error);
+  if (payload === null) {
+    console.error("Failed to serialize error response: the error could not be converted to a string. Original error:", error);
+    const fallback = prepareErrorResponse("Unknown error: the original error could not be serialized");
+    if (fallback !== null) {
+      hostBindings.sendResponse(fallback);
+    }
+    return;
+  }
+  hostBindings.sendResponse(payload);
+};
 var LATEST_ROUND_DATA = "0xfeaf968c";
 var SEPOLIA = ClientCapability.SUPPORTED_CHAIN_SELECTORS["ethereum-testnet-sepolia"];
 function decodePrice(data) {
@@ -15050,11 +15079,16 @@ function readChainlinkFeed(runtime2, http, feedAddress) {
     params: [{ to: feedAddress, data: LATEST_ROUND_DATA }, "latest"],
     id: 1
   }));
-  const resp = http.sendRequest(runtime2, { url: runtime2.config.oracleRpc, method: "POST", headers: { "Content-Type": "application/json" }, body }).result();
+  const resp = http.sendRequest(runtime2, {
+    url: runtime2.config.oracleRpc,
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body
+  }).result();
   const parsed = JSON.parse(bytesToString(resp.body));
   if (parsed.error)
-    throw new Error(`Chainlink feed ${feedAddress}: ${parsed.error.message ?? "RPC error"}`);
-  return decodePrice(hexToBytes2(parsed.result ?? "0x"));
+    throw new Error(`Chainlink feed ${feedAddress}: ${parsed.error.message ? parsed.error.message : "RPC error"}`);
+  return decodePrice(hexToBytes2(parsed.result ? parsed.result : "0x"));
 }
 function encodePayrollReport(payrollId, treasury, recipients, amounts) {
   const N = recipients.length;
@@ -15084,7 +15118,7 @@ function assetUsdPrice(asset, ethUsd, btcUsd) {
 function expandToPaymentUnits(employees, depositChainId) {
   const units = [];
   for (const emp of employees) {
-    const splitSum = emp.splits?.reduce((s, x) => s + x.percent, 0) ?? 0;
+    const splitSum = emp.splits && emp.splits.length > 0 ? emp.splits.reduce((s, x) => s + x.percent, 0) : 0;
     const validSplits = emp.splits && emp.splits.length > 0 && splitSum === 100;
     if (validSplits) {
       emp.splits.forEach((split, i2) => {
@@ -15099,16 +15133,21 @@ function expandToPaymentUnits(employees, depositChainId) {
         });
       });
     } else {
-      units.push({ ...emp, splitSettleAddress: null, _splitIndex: null, _splitLabel: null });
+      units.push({
+        ...emp,
+        splitSettleAddress: null,
+        _splitIndex: null,
+        _splitLabel: null
+      });
     }
   }
   return units;
 }
 var onHttpTrigger = (runtime2, payload) => {
   const body = JSON.parse(bytesToString(payload.input));
-  if (!body?.companyId)
+  if (!body || !body.companyId)
     throw new Error("Missing companyId in request body");
-  if (!body?.employees?.length)
+  if (!body.employees || !body.employees.length)
     throw new Error("No employees provided in request body");
   runtime2.log("╔══════════════════════════════════════════════════════════════════╗");
   runtime2.log("║         PayFlow · Chainlink CRE Payroll Workflow                ║");
@@ -15116,7 +15155,7 @@ var onHttpTrigger = (runtime2, payload) => {
   runtime2.log("╚══════════════════════════════════════════════════════════════════╝");
   runtime2.log(`[PayFlow] Network:        ${runtime2.config.networkLabel}`);
   runtime2.log(`[PayFlow] Company:        ${body.companyId}`);
-  runtime2.log(`[PayFlow] Treasury:       ${body.treasury ?? "not provided"}`);
+  runtime2.log(`[PayFlow] Treasury:       ${body.treasury ? body.treasury : "not provided"}`);
   runtime2.log(`[PayFlow] Deposit chain:  ${body.depositChainId}`);
   runtime2.log(`[PayFlow] Roster:         ${body.employees.length} employee(s)`);
   const eligible = body.employees.filter((e) => e.worldIdVerified);
@@ -15126,7 +15165,7 @@ var onHttpTrigger = (runtime2, payload) => {
   }
   if (eligible.length === 0)
     throw new Error("No World ID verified employees — payroll aborted");
-  const depositChainId = body.depositChainId ?? 11155111;
+  const depositChainId = body.depositChainId ? body.depositChainId : 11155111;
   const paymentUnits = expandToPaymentUnits(eligible, depositChainId);
   const totalUsdc = eligible.reduce((s, e) => s + e.salaryUsdc, 0);
   runtime2.log(`[PayFlow] Eligible:       ${eligible.length} employee(s) → ${paymentUnits.length} payment unit(s) (total ${totalUsdc} USDC)`);
@@ -15156,7 +15195,11 @@ var onHttpTrigger = (runtime2, payload) => {
   runtime2.log("│  CRE attests each rate against Chainlink oracle prices.");
   let backendQuotes = [];
   if (runtime2.config.backendApiUrl) {
-    const quotesBody = JSON.stringify({ employees: eligible, depositChainId, treasury: body.treasury });
+    const quotesBody = JSON.stringify({
+      employees: eligible,
+      depositChainId,
+      treasury: body.treasury
+    });
     const rem = quotesBody.length % 3;
     const safeBody = rem === 0 ? quotesBody : quotesBody + " ".repeat(3 - rem);
     try {
@@ -15167,7 +15210,7 @@ var onHttpTrigger = (runtime2, payload) => {
         body: base64Encode(safeBody)
       }).result();
       const data = JSON.parse(bytesToString(resp.body));
-      backendQuotes = data.quotes ?? [];
+      backendQuotes = data.quotes ? data.quotes : [];
       runtime2.log(`│  Received ${backendQuotes.length} quote(s) from backend`);
     } catch (err) {
       runtime2.log(`│  ⚠ Backend quotes failed: ${err.message} — falling back to oracle prices`);
@@ -15175,10 +15218,10 @@ var onHttpTrigger = (runtime2, payload) => {
   }
   const quoteIndex = new Map;
   for (const q of backendQuotes) {
-    quoteIndex.set(`${q.employeeId}:${q.splitIndex ?? "null"}`, q);
+    quoteIndex.set(`${q.employeeId}:${q.splitIndex !== null && q.splitIndex !== undefined ? q.splitIndex : "null"}`, q);
   }
   const results = paymentUnits.map((emp) => {
-    const settleChainId = emp.preferredChainId ?? depositChainId;
+    const settleChainId = emp.preferredChainId ? emp.preferredChainId : depositChainId;
     const oraclePrice = assetUsdPrice(emp.preferredAsset, ethUsd, btcUsd);
     const asset = emp.preferredAsset.toUpperCase();
     const isStablecoin = STABLECOINS.has(emp.preferredAsset.toLowerCase());
@@ -15199,9 +15242,9 @@ var onHttpTrigger = (runtime2, payload) => {
       quoteSource = "Chainlink oracle (stablecoin)";
       runtime2.log(`│    Quote:       stablecoin — 1:1 (${settleAmount.toFixed(6)} ${asset})`);
     } else {
-      const key = `${emp.id}:${emp._splitIndex ?? "null"}`;
+      const key = `${emp.id}:${emp._splitIndex !== undefined && emp._splitIndex !== null ? emp._splitIndex : "null"}`;
       const bq = quoteIndex.get(key);
-      if (bq?.settleAmount != null) {
+      if (bq && bq.settleAmount != null) {
         const effectiveUsdOut = bq.settleAmount * oraclePrice;
         const efficiency = isSol ? 1 : effectiveUsdOut / emp.salaryUsdc;
         deviationBps = isSol ? 0 : Math.round(Math.abs(1 - efficiency) * 1e4);
@@ -15221,7 +15264,7 @@ var onHttpTrigger = (runtime2, payload) => {
         deviationBps = 0;
         withinTolerance = true;
         quoteSource = "Chainlink oracle (no route)";
-        if (bq?.error)
+        if (bq && bq.error)
           runtime2.log(`│    ⚠ Quote error: ${bq.error}`);
         runtime2.log(`│    Quote:       no route — oracle fallback (${settleAmount.toFixed(8)} ${asset})`);
       }
@@ -15263,7 +15306,7 @@ var onHttpTrigger = (runtime2, payload) => {
     const payrollId = "0x" + cidHex + tsHex;
     const recipients = queued.map((r) => r.settleAddress);
     const amounts = queued.map((r) => r.salaryUsdc);
-    const encodedHex = encodePayrollReport(payrollId, body.treasury ?? "0x0000000000000000000000000000000000000000", recipients, amounts);
+    const encodedHex = encodePayrollReport(payrollId, body.treasury ? body.treasury : "0x0000000000000000000000000000000000000000", recipients, amounts);
     const rawReport = hexToBase642(encodedHex);
     evmClient.writeReport(runtime2, {
       receiver: dispatcher,
@@ -15281,7 +15324,10 @@ var onHttpTrigger = (runtime2, payload) => {
     runtime2.log(`
 ┌─ Step 6 · Backend Dispatch ─────────────────────────────────────────────┐`);
     runtime2.log(`│  Endpoint: ${runtime2.config.backendApiUrl}/api/payroll/${body.companyId}/run`);
-    const dispatchBody = JSON.stringify({ creVerified: true, networkMode: runtime2.config.networkLabel.includes("Sepolia") ? "testnet" : "mainnet" });
+    const dispatchBody = JSON.stringify({
+      creVerified: true,
+      networkMode: runtime2.config.networkLabel.includes("Sepolia") ? "testnet" : "mainnet"
+    });
     const rem = dispatchBody.length % 3;
     const safeBody = rem === 0 ? dispatchBody : dispatchBody + " ".repeat(3 - rem);
     try {
@@ -15293,7 +15339,7 @@ var onHttpTrigger = (runtime2, payload) => {
       }).result();
       const dispatchResult = JSON.parse(bytesToString(resp.body));
       dispatched = dispatchResult.ok === true;
-      runtime2.log(`│  Result: ${dispatched ? "✓ Payroll executed by backend" : "✗ " + (dispatchResult.error ?? "unknown error")}`);
+      runtime2.log(`│  Result: ${dispatched ? "✓ Payroll executed by backend" : "✗ " + (dispatchResult.error ? dispatchResult.error : "unknown error")}`);
     } catch (err) {
       runtime2.log(`│  Error: ${err.message}`);
     }
@@ -15333,48 +15379,9 @@ var onHttpTrigger = (runtime2, payload) => {
     }))
   });
 };
-var PAYROLL_REQUESTED_SIG = "0xdddc44ebd25e9809781bd368117a87083c8cc338999ef43c41471a9c6d47bfd7";
-function stringToBytes(s) {
-  const out = new Uint8Array(s.length);
-  for (let i2 = 0;i2 < s.length; i2++)
-    out[i2] = s.charCodeAt(i2) & 255;
-  return out;
-}
-var onLogTrigger = (runtime2, log) => {
-  const treasury = "0x" + Array.from(log.topics[1].slice(12)).map((b) => b.toString(16).padStart(2, "0")).join("");
-  const depositChainId = Number(bytesToBigint(log.topics[2]));
-  const txHashHex = "0x" + Array.from(log.txHash).map((b) => b.toString(16).padStart(2, "0")).join("");
-  runtime2.log("╔══════════════════════════════════════════════════════════════════╗");
-  runtime2.log("║    PayFlow · CRE Payroll Workflow  [ON-CHAIN LOG TRIGGER]       ║");
-  runtime2.log("╚══════════════════════════════════════════════════════════════════╝");
-  runtime2.log(`[PayFlow] Trigger tx:     ${txHashHex}`);
-  runtime2.log(`[PayFlow] Treasury:       ${treasury}`);
-  runtime2.log(`[PayFlow] Deposit chain:  ${depositChainId}`);
-  const http = new cre.capabilities.HTTPClient;
-  const payloadUrl = `${runtime2.config.backendApiUrl}/api/company/by-treasury/${treasury}/cre-payload`;
-  runtime2.log(`[PayFlow] Fetching payload: ${payloadUrl}`);
-  const payloadResp = http.sendRequest(runtime2, { url: payloadUrl, method: "GET", headers: { "Content-Type": "application/json" }, body: base64Encode("") }).result();
-  if (payloadResp.statusCode !== 200) {
-    throw new Error(`Failed to fetch company payload: HTTP ${payloadResp.statusCode}`);
-  }
-  const body = JSON.parse(bytesToString(payloadResp.body));
-  runtime2.log(`[PayFlow] Company:        ${body.companyId}`);
-  runtime2.log(`[PayFlow] Roster:         ${body.employees.length} employee(s)`);
-  const fakePayload = { input: stringToBytes(JSON.stringify(body)) };
-  return onHttpTrigger(runtime2, fakePayload);
-};
-var initWorkflow = (config) => {
-  const http = new HTTPCapability;
-  const handlers = [handler(http.trigger({}), onHttpTrigger)];
-  if (config.enableLogTrigger && config.triggerContractAddress && config.triggerContractAddress.length > 2) {
-    const evmClient = new cre.capabilities.EVMClient(ClientCapability.SUPPORTED_CHAIN_SELECTORS["ethereum-testnet-sepolia"]);
-    const logTrigger = evmClient.logTrigger({
-      addresses: [config.triggerContractAddress],
-      topics: [{ values: [PAYROLL_REQUESTED_SIG] }]
-    });
-    handlers.push(handler(logTrigger, onLogTrigger));
-  }
-  return handlers;
+var initWorkflow = (_config) => {
+  const http = new cre.capabilities.HTTPCapability;
+  return [cre.handler(http.trigger({}), onHttpTrigger)];
 };
 async function main() {
   const runner = await Runner.newRunner();

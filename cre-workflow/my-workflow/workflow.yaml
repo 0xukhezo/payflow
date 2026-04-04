@@ -23,12 +23,3 @@ staging-settings:
     config-path: "./config/config.staging.json"
     secrets-path: ""
     
-
-# ==========================================================================
-production-settings:
-  user-workflow:
-    workflow-name: "workflow-production"
-  workflow-artifacts:
-    workflow-path: "./main.ts"
-    config-path: "./config/config.production.json"
-    secrets-path: ""

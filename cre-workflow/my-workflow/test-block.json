@@ -20,8 +20,14 @@
           "settleAddress": null
         },
         {
-          "percent": 50,
+          "percent": 25,
           "asset": "eth",
+          "chain_id": 8453,
+          "settleAddress": "0xb8D5233B25d95B2749b137B665D8891941AC2301"
+        },
+        {
+          "percent": 25,
+          "asset": "usdc",
           "chain_id": 8453,
           "settleAddress": "0xb8D5233B25d95B2749b137B665D8891941AC2301"
         }
