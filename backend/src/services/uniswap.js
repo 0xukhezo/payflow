@@ -341,7 +341,9 @@ async function executeTwoHopSwap(quote, settleAddress) {
   const destUsdcAddr  = quote.destSwapQuote.rawQuote.input?.token ?? quote.destSwapQuote.rawQuote.tokenIn;
   const expectedUnits = BigInt(quote.destSwapQuote.rawQuote.input?.amount ?? quote.destSwapQuote.rawQuote.amountIn ?? "0");
 
-  // Snapshot USDC balance on dest chain before bridge
+  // Snapshot USDC balance on dest chain before bridge.
+  // Wait 5 s first so any prior confirmed transfer has propagated through the RPC node.
+  await new Promise((r) => setTimeout(r, 5_000));
   const destToken    = new ethers.Contract(destUsdcAddr, ERC20_ABI, destWallet);
   const balanceBefore = await destToken.balanceOf(destWallet.address);
   console.log(`[TwoHop] Relayer USDC on Base before bridge: ${balanceBefore}`);

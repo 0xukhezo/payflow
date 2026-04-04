@@ -92,6 +92,7 @@ export async function pullFromTreasury(asset, companyAddress, amount, chainId = 
  */
 export async function sendFromRelayer(asset, toAddress, amount, chainId) {
   const signer   = getRelayerSigner(chainId);
+  await signer.reset(); // re-sync nonce — prior Uniswap swaps may have advanced it
   const net      = getNetwork(chainId);
   const token    = getToken(asset, chainId);
   const contract = new ethers.Contract(token.address, ERC20_ABI, signer);

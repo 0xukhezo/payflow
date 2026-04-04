@@ -1,6 +1,6 @@
 # PayFlow — Backend
 
-Express API server that orchestrates the payroll flow: Uniswap swaps, SideShift cross-chain payments, Chainlink rate verification, World ID verification, and Supabase persistence.
+Express API server that orchestrates the payroll flow: Uniswap swaps, SideShift cross-chain payments, Chainlink rate verification, and Supabase persistence.
 
 ## API Endpoints
 
@@ -43,14 +43,6 @@ Express API server that orchestrates the payroll flow: Uniswap swaps, SideShift 
 | `GET`   | `/api/employee/:employeeId/splits` | Get payout splits |
 | `PUT`   | `/api/employee/:employeeId/splits` | Replace payout splits (must sum to 100%) |
 | `GET`   | `/api/employee/:address/history` | Payment history from Supabase + in-memory |
-
-### World ID
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/worldid/sign-request` | Generate RpContext for frontend IDKit widget |
-| `POST` | `/api/worldid/verify` | Validate World ID v4 proof, persist to DB |
-| `GET`  | `/api/worldid/verified/:address` | Check if a wallet has a pre-verification record |
 
 ---
 
@@ -120,21 +112,12 @@ Note: the CRE workflow uses an HTTP trigger locally. The EVM log trigger (listen
 
 ### `services/dynamic.js` — Relayer Wallet
 
-Manages the relayer EOA (`RELAYER_PRIVATE_KEY`) with FallbackProvider (multiple RPC endpoints, `stallTimeout: 2000ms`):
+Manages the relayer EOA (`RELAYER_PRIVATE_KEY`) with FallbackProvider (multiple RPC endpoints, `stallTimeout: 2000ms`, `staticNetwork` to prevent chain ID detection races):
 
-- `pullFromTreasury(asset, address, amount, chainId)` — `transferFrom` company treasury to relayer
+- `pullFromTreasury(asset, address, amount, chainId)` — resets NonceManager nonce then calls `transferFrom` company treasury to relayer
 - `sendFromRelayer(asset, toAddress, amount, chainId)` — ERC20 transfer from relayer to recipient
 - `getTreasuryBalance(asset, address, chainId)` — returns token balance in human-readable units
 - `getRelayerAddress()` — returns the relayer EOA address
-
----
-
-### `services/worldid.js` — World ID v4
-
-- `createRpContext(action)` — generates a signed `RpContext` using `@worldcoin/idkit-core/signing`
-- `verifyProof(rpId, idkitResponse)` — forwards IDKit result to `developer.world.org/api/v4/verify/:rpId`
-
-Verified nullifiers are stored in Supabase (`world_id_verifications` for pre-verified wallets, `employees.world_id_verified` for employees on payroll).
 
 ---
 
@@ -158,7 +141,7 @@ POST /api/payroll/:companyId/run-stream
   │
   ├── 4. pullFromTreasury()       pull USDC from company treasury to relayer
   │
-  └── 5. per unit (parallel)
+  └── 5. per unit (sequential)
           ├── "sideshift"  → createOrder() → relay deposit → SOL delivered
           └── "uniswap"    → executeSwap() → EVM token delivery
               └── supabase.insert(payroll_runs)
@@ -177,7 +160,6 @@ UNISWAP_API_KEY=              # From https://hub.uniswap.org
 
 # SideShift
 SIDESHIFT_SECRET=             # API secret for order creation
-SIDESHIFT_AFFILIATE_ID=       # Optional affiliate ID
 
 # Chain RPCs (primary + fallbacks configured in src/config/networks.js)
 ARBITRUM_RPC_URL=             # e.g. https://arb1.arbitrum.io/rpc
@@ -189,11 +171,6 @@ ETHEREUM_RPC_URL=             # e.g. https://cloudflare-eth.com
 # Supabase
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
-
-# World ID
-WORLD_ID_ACTION=              # action string (e.g. "verify-employee")
-RP_ID=                        # RP ID from developer.world.org
-RP_SIGNING_KEY=               # RP signing key (hex)
 
 # Chainlink CRE (deployed DON mode — leave empty for local simulation)
 CRE_HTTP_TRIGGER_URL=         # https://gateway.cre.chain.link/trigger/<workflow-id>
@@ -241,7 +218,6 @@ curl http://localhost:3001/health
 | preferred_asset | text | e.g. "weth" |
 | preferred_chain_id | int | e.g. 8453 (Base) |
 | salary_amount | numeric | In treasury asset units |
-| world_id_verified | boolean | Set after World ID proof |
 | added_at | timestamptz | |
 
 ### `payroll_splits`
@@ -285,10 +261,3 @@ curl http://localhost:3001/health
 | solana_address | text | Optional |
 | status | text | pending / accepted / rejected |
 | created_at | timestamptz | |
-
-### `world_id_verifications`
-
-| Column | Type | Notes |
-|---|---|---|
-| address | text | EVM wallet (lowercase), PK |
-| nullifier_hash | text | World ID nullifier |

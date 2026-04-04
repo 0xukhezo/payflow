@@ -9,11 +9,10 @@ Crypto payroll infrastructure. Companies fund a single USDC treasury; every empl
 | Frontend | Next.js 16, React 19, Tailwind CSS |
 | Backend | Node.js, Express |
 | Database | Supabase (Postgres) |
-| Wallet / Auth | Reown AppKit (EVM + Solana) |
+| Wallet / Auth | Reown AppKit (EVM + Solana) + SIWX |
 | Swaps | Uniswap Trading API v4 |
 | Cross-chain | SideShift API v2 (EVM → Solana) |
 | Rate verification | Chainlink CRE + Chainlink Data Feeds |
-| Identity | World ID v4 (IDKit) |
 
 ## How it works
 

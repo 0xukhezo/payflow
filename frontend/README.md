@@ -1,6 +1,6 @@
 # PayFlow — Frontend
 
-Next.js 16 app with two portals: a company dashboard for running payroll and an employee portal for managing payout splits and World ID verification.
+Next.js 16 app with two portals: a company dashboard for running payroll and an employee portal for managing payout splits.
 
 ## Pages
 
@@ -8,7 +8,7 @@ Next.js 16 app with two portals: a company dashboard for running payroll and an 
 | ------------------- | ------------------------------------------------------------------------------ |
 | `/`                 | Landing page with role selection (company / employee)                          |
 | `/company`          | Company dashboard — treasury balance, employee list, payroll execution         |
-| `/employee`         | Employee portal — payout splits, World ID verification, payment history        |
+| `/employee`         | Employee portal — payout splits, payment history                               |
 | `/verify/[shiftId]` | Public attestation viewer — Chainlink oracle rate verification for any payment |
 
 ---
@@ -18,6 +18,7 @@ Next.js 16 app with two portals: a company dashboard for running payroll and an 
 ### Company Dashboard (`/company`)
 
 - **Wallet connection** via Reown AppKit (`useAppKitAccount`, `useAppKitProvider`)
+- **SIWX** — Sign In With X prompt on wallet connect; session stored via `DefaultSIWX`
 - **USDC Approve** — calls `USDC.approve(relayerAddress, MaxUint256)` directly from the connected wallet
 - **Run Payroll** — calls `POST /api/payroll/:companyId/run-stream`, streams live progress steps via SSE
 - **Progress modal** — shows each step (Chainlink rate verification, treasury pull, swap, bridge, transfer) with status icons, tx hash links, and per-employee sections
@@ -28,7 +29,6 @@ Next.js 16 app with two portals: a company dashboard for running payroll and an 
 - **Join requests** — search for a company by name and submit a join request; the company owner reviews and accepts it from their dashboard
 - **Payout splits** — configure multiple splits (token + chain + percentage). Splits must sum to 100%.
 - **SOL support** — selecting SOL auto-sets chain to Solana and shows a Solana address input
-- **World ID verification** — IDKit v4 widget, proof sent to backend for server-side validation
 - **Payment history** — salary history table sourced from Supabase with per-payment oracle attestation badges
 
 ### Verify Page (`/verify/[shiftId]`)
@@ -42,14 +42,21 @@ Public page. Fetches shift data from `GET /api/payroll/shift/:shiftId`, displays
 
 ---
 
-## Wallet Connection (Reown AppKit)
+## Wallet Connection (Reown AppKit + SIWX)
 
-Reown AppKit is used throughout the app for wallet connection and transaction signing.
+Reown AppKit is used throughout the app for wallet connection, transaction signing, and authentication.
 
 **`providers.tsx`**
 
 ```tsx
-<AppKitProvider projectId={REOWN_PROJECT_ID} networks={[arbitrum, base, sepolia]}>
+import { DefaultSIWX } from "@reown/appkit-siwx";
+
+createAppKit({
+  adapters: [new EthersAdapter(), solanaAdapter],
+  networks: [sepolia, solana],
+  projectId,
+  siwx: new DefaultSIWX(),  // prompts wallet sign after connect
+});
 ```
 
 **`/company`** — wallet auth + signing
@@ -69,7 +76,7 @@ const { walletProvider } = useAppKitProvider("eip155");
 | Component          | Description                                                  |
 | ------------------ | ------------------------------------------------------------ |
 | `WalletCard`       | Shows wallet address, network, treasury balance              |
-| `PayrollTable`     | Employee list with salary amounts and World ID status badges |
+| `PayrollTable`     | Employee list with salary amounts                            |
 | `SalaryHistory`    | Payment history table with attestation badges and tx links   |
 | `AssetSelector`    | Dropdown for selecting preferred token (including SOL)       |
 | `NetworkSelector`  | Dropdown for selecting the settlement network                |
@@ -137,7 +144,8 @@ The backend must be deployed separately (Railway, Render, or similar) before the
 | `next`                        | 16.2.0  | Framework                             |
 | `react`                       | 19.2.4  | UI                                    |
 | `@reown/appkit`               | latest  | Wallet connection + signing           |
-| `@reown/appkit-adapter-wagmi` | latest  | EVM wallet connectors                 |
+| `@reown/appkit-siwx`          | latest  | Sign In With X authentication         |
+| `@reown/appkit-adapter-ethers`| latest  | EVM wallet connectors                 |
 | `viem`                        | latest  | Typed contract calls for USDC approve |
 | `ethers`                      | ^6.16   | BrowserProvider, tx signing           |
 | `tailwindcss`                 | ^4      | Styling                               |
