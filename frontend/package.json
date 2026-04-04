@@ -18,7 +18,6 @@
     "@reown/appkit-adapter-solana": "^1.8.19",
     "@reown/appkit-siwx": "^1.8.19",
     "@solana/wallet-adapter-wallets": "^0.19.37",
-    "@worldcoin/idkit": "^4.0.10",
     "bs58": "^6.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
