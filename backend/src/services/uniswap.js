@@ -619,6 +619,7 @@ async function directTransfer(coin, chainId, amount, toAddress) {
   const units  = toTokenUnits(amount, token.decimals);
   const tx     = await erc20.transfer(toAddress, units);
   console.log(`[Uniswap] direct transfer ${amount} ${coin} to ${toAddress}: ${tx.hash}`);
+  await tx.wait();
   return {
     id:             tx.hash,
     depositAddress: wallet.address,
